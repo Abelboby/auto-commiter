@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import { getSettings, SECRET_KEY } from "./config";
 import { collectChanges, commitFile, getRepositoryRoot, getWorkspaceRoot } from "./git";
 import { generateCommitMessage } from "./groq";
-import { openReviewPanel } from "./reviewPanel";
 import { AutoCommiterSidebarProvider } from "./sidebarView";
 import { openSettingsPanel } from "./settingsPanel";
 import { CandidateCommit } from "./types";
@@ -11,10 +10,14 @@ const OUTPUT_CHANNEL = vscode.window.createOutputChannel("Auto Commiter");
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(OUTPUT_CHANNEL);
+  const sidebarProvider = new AutoCommiterSidebarProvider(context, OUTPUT_CHANNEL);
+  sidebarProvider.onCommitRequested = async (commits) => {
+    await commitFromSidebar(context, sidebarProvider, commits);
+  };
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       AutoCommiterSidebarProvider.viewType,
-      new AutoCommiterSidebarProvider(context, OUTPUT_CHANNEL)
+      sidebarProvider
     )
   );
 
@@ -51,18 +54,23 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("autoCommiter.runAutoCommit", async () => {
-      await runAutoCommit(context);
+      await runAutoCommit(context, sidebarProvider);
     })
   );
 }
 
-async function runAutoCommit(context: vscode.ExtensionContext): Promise<void> {
+async function runAutoCommit(
+  context: vscode.ExtensionContext,
+  sidebarProvider: AutoCommiterSidebarProvider
+): Promise<void> {
   try {
     OUTPUT_CHANNEL.clear();
     OUTPUT_CHANNEL.show(true);
+    await sidebarProvider.refreshApiKeyState();
 
     const apiKey = await ensureApiKey(context);
     if (!apiKey) {
+      sidebarProvider.setErrorState("Add a Groq API key before generating commit messages.");
       return;
     }
 
@@ -70,9 +78,11 @@ async function runAutoCommit(context: vscode.ExtensionContext): Promise<void> {
     const workspaceRoot = await getWorkspaceRoot();
     const repoRoot = await getRepositoryRoot(workspaceRoot);
     OUTPUT_CHANNEL.appendLine(`Repository root: ${repoRoot}`);
+    sidebarProvider.setGeneratingState("Scanning the repository and generating commit suggestions.");
 
     const changes = await collectChanges(repoRoot, settings.maxDiffCharacters);
     if (changes.length === 0) {
+      sidebarProvider.setIdleState("No changed or untracked files were found in this repository.");
       vscode.window.showInformationMessage("No changed or untracked files found.");
       return;
     }
@@ -120,6 +130,7 @@ async function runAutoCommit(context: vscode.ExtensionContext): Promise<void> {
     if (fallbackCount > 0 && !settings.allowFallbackCommits) {
       const filtered = commits.filter((item) => !item.isFallback);
       if (filtered.length === 0) {
+        sidebarProvider.setErrorState("All generated messages were fallbacks, and fallback commits are disabled.");
         vscode.window.showWarningMessage("All generated messages were fallback messages and fallback commits are disabled.");
         return;
       }
@@ -127,11 +138,33 @@ async function runAutoCommit(context: vscode.ExtensionContext): Promise<void> {
       commits.push(...filtered);
     }
 
-    const review = await openReviewPanel(commits);
-    if (!review || review.commits.length === 0) {
+    sidebarProvider.setReviewState(
+      commits,
+      "Review the generated messages below. You can edit any text, deselect files, and commit from this sidebar."
+    );
+    vscode.window.showInformationMessage("Commit messages are ready. Review and commit them from the Auto Commiter sidebar.");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    OUTPUT_CHANNEL.appendLine(message);
+    sidebarProvider.setErrorState(message);
+    vscode.window.showErrorMessage(`Auto Commiter failed: ${message}`);
+  }
+}
+
+async function commitFromSidebar(
+  context: vscode.ExtensionContext,
+  sidebarProvider: AutoCommiterSidebarProvider,
+  commits: CandidateCommit[]
+): Promise<void> {
+  try {
+    if (commits.length === 0) {
       vscode.window.showWarningMessage("No files were selected for commit.");
       return;
     }
+
+    const workspaceRoot = await getWorkspaceRoot();
+    const repoRoot = await getRepositoryRoot(workspaceRoot);
+    sidebarProvider.setCommittingState("Creating commits for the selected files.");
 
     await vscode.window.withProgress(
       {
@@ -140,10 +173,10 @@ async function runAutoCommit(context: vscode.ExtensionContext): Promise<void> {
         cancellable: false
       },
       async (progress) => {
-        for (let index = 0; index < review.commits.length; index += 1) {
-          const commit = review.commits[index];
+        for (let index = 0; index < commits.length; index += 1) {
+          const commit = commits[index];
           progress.report({
-            increment: 100 / review.commits.length,
+            increment: 100 / commits.length,
             message: commit.filePath
           });
           OUTPUT_CHANNEL.appendLine(`Committing ${commit.filePath} with message: ${commit.message}`);
@@ -152,10 +185,12 @@ async function runAutoCommit(context: vscode.ExtensionContext): Promise<void> {
       }
     );
 
-    vscode.window.showInformationMessage(`Committed ${review.commits.length} file(s) successfully.`);
+    sidebarProvider.setDoneState(`Committed ${commits.length} file(s) successfully. You can run another pass whenever you are ready.`);
+    vscode.window.showInformationMessage(`Committed ${commits.length} file(s) successfully.`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     OUTPUT_CHANNEL.appendLine(message);
+    sidebarProvider.setErrorState(message);
     vscode.window.showErrorMessage(`Auto Commiter failed: ${message}`);
   }
 }
