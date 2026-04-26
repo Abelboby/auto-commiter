@@ -1,0 +1,173 @@
+import * as vscode from "vscode";
+import { getSettings, SECRET_KEY } from "./config";
+import { collectChanges, commitFile, getRepositoryRoot, getWorkspaceRoot } from "./git";
+import { generateCommitMessage } from "./groq";
+import { openReviewPanel } from "./reviewPanel";
+import { openSettingsPanel } from "./settingsPanel";
+import { CandidateCommit } from "./types";
+
+const OUTPUT_CHANNEL = vscode.window.createOutputChannel("Auto Commiter");
+
+export function activate(context: vscode.ExtensionContext): void {
+  context.subscriptions.push(OUTPUT_CHANNEL);
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("autoCommiter.setGroqApiKey", async () => {
+      const value = await vscode.window.showInputBox({
+        prompt: "Enter your Groq API key",
+        password: true,
+        ignoreFocusOut: true,
+        placeHolder: "gsk_..."
+      });
+
+      if (typeof value !== "string" || value.trim().length === 0) {
+        vscode.window.showWarningMessage("Groq API key was not changed.");
+        return;
+      }
+
+      await context.secrets.store(SECRET_KEY, value.trim());
+      vscode.window.showInformationMessage("Groq API key saved in VS Code secret storage.");
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("autoCommiter.manageSettings", async () => {
+      await openSettingsPanel(context);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("autoCommiter.runAutoCommit", async () => {
+      await runAutoCommit(context);
+    })
+  );
+}
+
+async function runAutoCommit(context: vscode.ExtensionContext): Promise<void> {
+  try {
+    OUTPUT_CHANNEL.clear();
+    OUTPUT_CHANNEL.show(true);
+
+    const apiKey = await ensureApiKey(context);
+    if (!apiKey) {
+      return;
+    }
+
+    const settings = getSettings();
+    const workspaceRoot = await getWorkspaceRoot();
+    const repoRoot = await getRepositoryRoot(workspaceRoot);
+    OUTPUT_CHANNEL.appendLine(`Repository root: ${repoRoot}`);
+
+    const changes = await collectChanges(repoRoot, settings.maxDiffCharacters);
+    if (changes.length === 0) {
+      vscode.window.showInformationMessage("No changed or untracked files found.");
+      return;
+    }
+
+    const commits: CandidateCommit[] = [];
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Auto Commiter is generating commit messages",
+        cancellable: false
+      },
+      async (progress) => {
+        for (let index = 0; index < changes.length; index += 1) {
+          const change = changes[index];
+          progress.report({
+            increment: 100 / changes.length,
+            message: change.filePath
+          });
+
+          const result = await generateCommitMessage({
+            apiKey,
+            filePath: change.filePath,
+            promptContent: change.promptContent,
+            settings: {
+              models: settings.models,
+              validTags: settings.commitTagOptions,
+              maxWords: settings.maxCommitWords,
+              temperature: settings.temperature
+            }
+          });
+
+          result.auditTrail.forEach((entry) => OUTPUT_CHANNEL.appendLine(`[${change.filePath}] ${entry}`));
+
+          commits.push({
+            filePath: change.filePath,
+            message: result.text,
+            isFallback: result.isFallback
+          });
+        }
+      }
+    );
+
+    const fallbackCount = commits.filter((item) => item.isFallback).length;
+    if (fallbackCount > 0 && !settings.allowFallbackCommits) {
+      const filtered = commits.filter((item) => !item.isFallback);
+      if (filtered.length === 0) {
+        vscode.window.showWarningMessage("All generated messages were fallback messages and fallback commits are disabled.");
+        return;
+      }
+      commits.length = 0;
+      commits.push(...filtered);
+    }
+
+    const review = await openReviewPanel(commits);
+    if (!review || review.commits.length === 0) {
+      vscode.window.showWarningMessage("No files were selected for commit.");
+      return;
+    }
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Auto Commiter is creating commits",
+        cancellable: false
+      },
+      async (progress) => {
+        for (let index = 0; index < review.commits.length; index += 1) {
+          const commit = review.commits[index];
+          progress.report({
+            increment: 100 / review.commits.length,
+            message: commit.filePath
+          });
+          OUTPUT_CHANNEL.appendLine(`Committing ${commit.filePath} with message: ${commit.message}`);
+          await commitFile(repoRoot, commit.filePath, commit.message);
+        }
+      }
+    );
+
+    vscode.window.showInformationMessage(`Committed ${review.commits.length} file(s) successfully.`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    OUTPUT_CHANNEL.appendLine(message);
+    vscode.window.showErrorMessage(`Auto Commiter failed: ${message}`);
+  }
+}
+
+async function ensureApiKey(context: vscode.ExtensionContext): Promise<string | undefined> {
+  const existing = await context.secrets.get(SECRET_KEY);
+  if (existing?.trim()) {
+    return existing.trim();
+  }
+
+  const answer = await vscode.window.showInformationMessage(
+    "Auto Commiter needs a Groq API key before it can generate commit messages.",
+    "Set API Key",
+    "Open Settings"
+  );
+
+  if (answer === "Set API Key") {
+    await vscode.commands.executeCommand("autoCommiter.setGroqApiKey");
+  }
+
+  if (answer === "Open Settings") {
+    await openSettingsPanel(context);
+  }
+
+  return (await context.secrets.get(SECRET_KEY))?.trim();
+}
+
+export function deactivate(): void {}
