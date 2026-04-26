@@ -3,6 +3,7 @@ import { getSettings, SECRET_KEY } from "./config";
 import { collectChanges, commitFile, getRepositoryRoot, getWorkspaceRoot } from "./git";
 import { generateCommitMessage } from "./groq";
 import { openReviewPanel } from "./reviewPanel";
+import { AutoCommiterSidebarProvider } from "./sidebarView";
 import { openSettingsPanel } from "./settingsPanel";
 import { CandidateCommit } from "./types";
 
@@ -10,6 +11,12 @@ const OUTPUT_CHANNEL = vscode.window.createOutputChannel("Auto Commiter");
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(OUTPUT_CHANNEL);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      AutoCommiterSidebarProvider.viewType,
+      new AutoCommiterSidebarProvider(context, OUTPUT_CHANNEL)
+    )
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand("autoCommiter.setGroqApiKey", async () => {
@@ -33,6 +40,12 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("autoCommiter.manageSettings", async () => {
       await openSettingsPanel(context);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("autoCommiter.openOutput", async () => {
+      OUTPUT_CHANNEL.show(true);
     })
   );
 
