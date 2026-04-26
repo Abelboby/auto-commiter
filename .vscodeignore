@@ -5,3 +5,7 @@ node_modules
 .git
 *.vsix
 docs/
+src/**
+tsconfig.json
+auot-commiter.ps1
+groq-models.json
