@@ -1,12 +1,34 @@
 import * as vscode from "vscode";
 import { SECRET_KEY } from "./config";
+import { CandidateCommit } from "./types";
 
 function getNonce(): string {
   return Math.random().toString(36).slice(2);
 }
 
+type SidebarStage = "idle" | "generating" | "review" | "committing" | "done" | "error";
+
+interface SidebarDraftCommit extends CandidateCommit {
+  included: boolean;
+}
+
+interface SidebarState {
+  stage: SidebarStage;
+  statusMessage: string;
+  apiKeyConfigured: boolean;
+  pendingCommits: SidebarDraftCommit[];
+}
+
 export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "autoCommiter.sidebar";
+  private currentView: vscode.WebviewView | undefined;
+  private readonly state: SidebarState = {
+    stage: "idle",
+    statusMessage: "Ready to scan your repo and prepare commit messages.",
+    apiKeyConfigured: false,
+    pendingCommits: []
+  };
+  public onCommitRequested: ((commits: CandidateCommit[]) => Promise<void>) | undefined;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -14,16 +36,13 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
   ) {}
 
   async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
+    this.currentView = webviewView;
     webviewView.webview.options = {
       enableScripts: true
     };
 
-    const render = async () => {
-      const apiKeyConfigured = Boolean((await this.context.secrets.get(SECRET_KEY))?.trim());
-      webviewView.webview.html = this.getHtml(apiKeyConfigured);
-    };
-
-    await render();
+    await this.refreshApiKeyState();
+    this.render();
 
     webviewView.webview.onDidReceiveMessage(async (message: unknown) => {
       if (!message || typeof message !== "object") {
@@ -36,20 +55,96 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       }
       if (typedMessage.type === "settings") {
         await vscode.commands.executeCommand("autoCommiter.manageSettings");
-        await render();
+        await this.refreshApiKeyState();
+        this.render();
       }
       if (typedMessage.type === "apiKey") {
         await vscode.commands.executeCommand("autoCommiter.setGroqApiKey");
-        await render();
+        await this.refreshApiKeyState();
+        this.render();
       }
       if (typedMessage.type === "output") {
         this.outputChannel.show(true);
       }
+      if (typedMessage.type === "clear-review") {
+        this.clearPendingCommits();
+      }
+      if (typedMessage.type === "commit") {
+        const payload = message as { commits?: CandidateCommit[] };
+        if (Array.isArray(payload.commits) && this.onCommitRequested) {
+          await this.onCommitRequested(payload.commits);
+        }
+      }
+    });
+
+    webviewView.onDidDispose(() => {
+      this.currentView = undefined;
     });
   }
 
-  private getHtml(apiKeyConfigured: boolean): string {
+  async refreshApiKeyState(): Promise<void> {
+    this.state.apiKeyConfigured = Boolean((await this.context.secrets.get(SECRET_KEY))?.trim());
+  }
+
+  setGeneratingState(message: string): void {
+    this.state.stage = "generating";
+    this.state.statusMessage = message;
+    this.state.pendingCommits = [];
+    this.render();
+  }
+
+  setReviewState(commits: CandidateCommit[], message: string): void {
+    this.state.stage = "review";
+    this.state.statusMessage = message;
+    this.state.pendingCommits = commits.map((commit) => ({
+      ...commit,
+      included: true
+    }));
+    this.render();
+  }
+
+  setCommittingState(message: string): void {
+    this.state.stage = "committing";
+    this.state.statusMessage = message;
+    this.render();
+  }
+
+  setIdleState(message: string): void {
+    this.state.stage = "idle";
+    this.state.statusMessage = message;
+    this.state.pendingCommits = [];
+    this.render();
+  }
+
+  setDoneState(message: string): void {
+    this.state.stage = "done";
+    this.state.statusMessage = message;
+    this.render();
+  }
+
+  setErrorState(message: string): void {
+    this.state.stage = "error";
+    this.state.statusMessage = message;
+    this.render();
+  }
+
+  clearPendingCommits(): void {
+    this.state.stage = "idle";
+    this.state.statusMessage = "Review cleared. Ready for another run.";
+    this.state.pendingCommits = [];
+    this.render();
+  }
+
+  private render(): void {
+    if (!this.currentView) {
+      return;
+    }
+    this.currentView.webview.html = this.getHtml();
+  }
+
+  private getHtml(): string {
     const nonce = getNonce();
+    const canCommit = this.state.pendingCommits.some((commit) => commit.included);
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,15 +161,15 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
     }
     .stack {
       display: grid;
-      gap: 12px;
+      gap: 14px;
     }
     .panel {
       border: 1px solid var(--vscode-panel-border);
-      border-radius: 8px;
-      padding: 12px;
+      border-radius: 10px;
+      padding: 14px;
       display: grid;
-      gap: 10px;
-      background: color-mix(in srgb, var(--vscode-sideBar-background) 90%, var(--vscode-editor-inactiveSelectionBackground) 10%);
+      gap: 12px;
+      background: color-mix(in srgb, var(--vscode-sideBar-background) 88%, var(--vscode-editor-inactiveSelectionBackground) 12%);
     }
     h2, p {
       margin: 0;
@@ -93,16 +188,23 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       width: 8px;
       height: 8px;
       border-radius: 999px;
-      background: ${apiKeyConfigured ? "var(--vscode-testing-iconPassed)" : "var(--vscode-testing-iconFailed)"};
+      background: ${this.state.apiKeyConfigured ? "var(--vscode-testing-iconPassed)" : "var(--vscode-testing-iconFailed)"};
     }
     button {
       width: 100%;
       border: 0;
-      border-radius: 6px;
+      border-radius: 8px;
       padding: 10px 12px;
       cursor: pointer;
       font: inherit;
       text-align: left;
+      transition: filter 120ms ease, transform 120ms ease;
+    }
+    button:hover {
+      filter: brightness(1.05);
+    }
+    button:active {
+      transform: translateY(1px);
     }
     .primary {
       background: var(--vscode-button-background);
@@ -115,37 +217,247 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
     .tiny {
       font-size: 12px;
     }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top right, color-mix(in srgb, var(--vscode-button-background) 42%, transparent) 0, transparent 42%),
+        linear-gradient(160deg, color-mix(in srgb, var(--vscode-button-background) 18%, var(--vscode-sideBar-background) 82%), var(--vscode-sideBar-background));
+    }
+    .heroTitle {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    .chipRow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip {
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      background: color-mix(in srgb, var(--vscode-sideBar-background) 75%, var(--vscode-editor-inactiveSelectionBackground) 25%);
+    }
+    .actions {
+      display: grid;
+      gap: 10px;
+    }
+    .splitActions {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr 1fr;
+    }
+    .reviewHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge {
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 11px;
+      border: 1px solid var(--vscode-panel-border);
+      color: var(--vscode-descriptionForeground);
+    }
+    .reviewList {
+      display: grid;
+      gap: 10px;
+      max-height: 420px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    .commitCard {
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 8px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      background: color-mix(in srgb, var(--vscode-sideBar-background) 78%, var(--vscode-editor-inactiveSelectionBackground) 22%);
+    }
+    .commitTop {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .pathLabel {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+    .pathText {
+      font-size: 12px;
+      color: var(--vscode-foreground);
+    }
+    .checkbox {
+      margin-top: 2px;
+    }
+    .messageInput {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 8px;
+      border: 1px solid var(--vscode-input-border);
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      padding: 9px 10px;
+      font: inherit;
+    }
+    .statusPanel {
+      border-left: 3px solid var(--vscode-button-background);
+      padding-left: 10px;
+    }
+    .emptyState {
+      color: var(--vscode-descriptionForeground);
+      line-height: 1.45;
+    }
   </style>
 </head>
 <body>
   <div class="stack">
-    <div class="panel">
-      <h2>Auto Commiter</h2>
-      <p class="muted">Run commits, manage models, and keep the whole workflow one click away from the Activity Bar.</p>
+    <div class="panel hero">
+      <div class="chipRow">
+        <span class="chip">Groq powered</span>
+        <span class="chip">Per-file commits</span>
+        <span class="chip">Sidebar workflow</span>
+      </div>
+      <div class="heroTitle">Auto Commiter</div>
+      <p class="muted">Generate, review, edit, and commit from one compact workspace instead of bouncing between prompts.</p>
       <div class="status">
         <span class="dot"></span>
-        <span>${apiKeyConfigured ? "Groq API key configured" : "Groq API key not configured"}</span>
+        <span>${this.state.apiKeyConfigured ? "Groq API key configured" : "Groq API key not configured"}</span>
       </div>
     </div>
     <div class="panel">
-      <button class="primary" data-action="run">Generate And Commit Changes</button>
-      <button class="secondary" data-action="settings">Manage Models And Settings</button>
-      <button class="secondary" data-action="apiKey">Set Groq API Key</button>
-      <button class="secondary" data-action="output">Open Output Log</button>
+      <div class="statusPanel">
+        <div class="badge">${this.state.stage.toUpperCase()}</div>
+        <p class="muted">${escapeHtml(this.state.statusMessage)}</p>
+      </div>
+      <div class="actions">
+        <button class="primary" data-action="run">${this.state.stage === "generating" ? "Generating Commit Messages..." : "Generate Commit Messages"}</button>
+        <div class="splitActions">
+          <button class="secondary" data-action="settings">Settings</button>
+          <button class="secondary" data-action="apiKey">API Key</button>
+        </div>
+        <button class="secondary" data-action="output">Open Output Log</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="reviewHeader">
+        <h2>Review Queue</h2>
+        <span class="badge">${this.state.pendingCommits.length} file(s)</span>
+      </div>
+      ${
+        this.state.pendingCommits.length === 0
+          ? `<p class="emptyState">Generate commit messages and the full review step will appear here. You can edit message text, deselect files, and commit the chosen ones without leaving the sidebar.</p>`
+          : `<div class="reviewList" id="reviewList"></div>
+             <div class="splitActions">
+               <button class="secondary" data-action="clear-review">Clear Review</button>
+               <button class="primary" id="commitSelected" ${canCommit ? "" : "disabled"}>Commit Selected</button>
+             </div>`
+      }
     </div>
     <div class="panel tiny">
-      <p class="muted">Future updates are simple: bump the version and rebuild the VSIX. The package scripts now include dedicated release commands for patch, minor, and major updates.</p>
+      <p class="muted">Future updates are already wired in: bump the version, rebuild the VSIX, then publish with the package scripts whenever you are ready.</p>
     </div>
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    const commits = ${JSON.stringify(this.state.pendingCommits)};
+
+    function escapeHtml(value) {
+      return value.replace(/[&<>"]/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;"
+      }[char]));
+    }
+
+    function renderReview() {
+      const reviewList = document.getElementById("reviewList");
+      if (!reviewList) {
+        return;
+      }
+
+      reviewList.innerHTML = "";
+      commits.forEach((entry, index) => {
+        const card = document.createElement("div");
+        card.className = "commitCard";
+        card.innerHTML = \`
+          <div class="commitTop">
+            <label class="pathLabel">
+              <input class="checkbox" type="checkbox" data-kind="included" data-index="\${index}" \${entry.included ? "checked" : ""} />
+              <span class="pathText">\${escapeHtml(entry.filePath)}</span>
+            </label>
+            \${entry.isFallback ? '<span class="badge">fallback</span>' : ""}
+          </div>
+          <input class="messageInput" type="text" data-kind="message" data-index="\${index}" value="\${escapeHtml(entry.message)}" />
+        \`;
+        reviewList.appendChild(card);
+      });
+
+      reviewList.querySelectorAll("input").forEach((input) => {
+        input.addEventListener("input", handleInput);
+        input.addEventListener("change", handleInput);
+      });
+    }
+
+    function handleInput(event) {
+      const target = event.target;
+      const index = Number(target.dataset.index);
+      if (target.dataset.kind === "included") {
+        commits[index].included = target.checked;
+      }
+      if (target.dataset.kind === "message") {
+        commits[index].message = target.value;
+      }
+    }
+
     document.querySelectorAll("button[data-action]").forEach((button) => {
       button.addEventListener("click", () => {
         vscode.postMessage({ type: button.dataset.action });
       });
     });
+
+    const commitButton = document.getElementById("commitSelected");
+    if (commitButton) {
+      commitButton.addEventListener("click", () => {
+        vscode.postMessage({
+          type: "commit",
+          commits: commits
+            .filter((entry) => entry.included)
+            .map(({ included, ...rest }) => rest)
+        });
+      });
+    }
+
+    renderReview();
   </script>
 </body>
 </html>`;
   }
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"]/g, (char) => {
+    switch (char) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      default:
+        return char;
+    }
+  });
 }
