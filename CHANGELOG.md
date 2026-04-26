@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.1
+
+- Added an Activity Bar sidebar with quick actions for running commits, opening settings, setting the API key, and viewing logs
+- Added packaging and publish scripts to make future updates easier
+
 ## 0.1.0
 
 - Initial VS Code extension implementation
