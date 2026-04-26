@@ -40,10 +40,12 @@ const config_1 = require("./config");
 const git_1 = require("./git");
 const groq_1 = require("./groq");
 const reviewPanel_1 = require("./reviewPanel");
+const sidebarView_1 = require("./sidebarView");
 const settingsPanel_1 = require("./settingsPanel");
 const OUTPUT_CHANNEL = vscode.window.createOutputChannel("Auto Commiter");
 function activate(context) {
     context.subscriptions.push(OUTPUT_CHANNEL);
+    context.subscriptions.push(vscode.window.registerWebviewViewProvider(sidebarView_1.AutoCommiterSidebarProvider.viewType, new sidebarView_1.AutoCommiterSidebarProvider(context, OUTPUT_CHANNEL)));
     context.subscriptions.push(vscode.commands.registerCommand("autoCommiter.setGroqApiKey", async () => {
         const value = await vscode.window.showInputBox({
             prompt: "Enter your Groq API key",
@@ -60,6 +62,9 @@ function activate(context) {
     }));
     context.subscriptions.push(vscode.commands.registerCommand("autoCommiter.manageSettings", async () => {
         await (0, settingsPanel_1.openSettingsPanel)(context);
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand("autoCommiter.openOutput", async () => {
+        OUTPUT_CHANNEL.show(true);
     }));
     context.subscriptions.push(vscode.commands.registerCommand("autoCommiter.runAutoCommit", async () => {
         await runAutoCommit(context);
