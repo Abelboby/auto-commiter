@@ -1,0 +1,163 @@
+{
+  "name": "auto-commiter",
+  "displayName": "Auto Commiter",
+  "description": "Generate per-file git commit messages with Groq and commit them from VS Code.",
+  "version": "0.1.0",
+  "publisher": "abelboby",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "SCM"
+  ],
+  "activationEvents": [
+    "onCommand:autoCommiter.runAutoCommit",
+    "onCommand:autoCommiter.manageSettings",
+    "onCommand:autoCommiter.setGroqApiKey"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "autoCommiter.runAutoCommit",
+        "title": "Auto Commiter: Generate and Commit Changes"
+      },
+      {
+        "command": "autoCommiter.manageSettings",
+        "title": "Auto Commiter: Manage Models and Settings"
+      },
+      {
+        "command": "autoCommiter.setGroqApiKey",
+        "title": "Auto Commiter: Set Groq API Key"
+      }
+    ],
+    "configuration": {
+      "title": "Auto Commiter",
+      "properties": {
+        "autoCommiter.models": {
+          "type": "array",
+          "default": [
+            {
+              "id": "llama-3.1-8b-instant",
+              "enabled": true,
+              "maxCallsPerRun": 20,
+              "costOrder": 1,
+              "costTier": "lowest"
+            },
+            {
+              "id": "openai/gpt-oss-20b",
+              "enabled": true,
+              "maxCallsPerRun": 18,
+              "costOrder": 2,
+              "costTier": "low"
+            },
+            {
+              "id": "meta-llama/llama-4-scout-17b-16e-instruct",
+              "enabled": true,
+              "maxCallsPerRun": 15,
+              "costOrder": 3,
+              "costTier": "medium-low"
+            },
+            {
+              "id": "openai/gpt-oss-120b",
+              "enabled": true,
+              "maxCallsPerRun": 12,
+              "costOrder": 4,
+              "costTier": "medium"
+            },
+            {
+              "id": "qwen/qwen3-32b",
+              "enabled": true,
+              "maxCallsPerRun": 35,
+              "costOrder": 5,
+              "costTier": "medium-high"
+            },
+            {
+              "id": "llama-3.3-70b-versatile",
+              "enabled": true,
+              "maxCallsPerRun": 10,
+              "costOrder": 6,
+              "costTier": "highest"
+            }
+          ],
+          "description": "Groq models to try in order. Users can disable models, change limits, or add new models.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "enabled",
+              "maxCallsPerRun"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "maxCallsPerRun": {
+                "type": "number",
+                "minimum": 1
+              },
+              "costOrder": {
+                "type": "number"
+              },
+              "costTier": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "autoCommiter.commitTagOptions": {
+          "type": "array",
+          "default": [
+            "Add:",
+            "Update:",
+            "Fix:",
+            "Refactor:",
+            "Ignore:"
+          ],
+          "description": "Allowed commit message prefixes."
+        },
+        "autoCommiter.maxDiffCharacters": {
+          "type": "number",
+          "default": 4000,
+          "minimum": 500,
+          "description": "Maximum characters sent from a file diff or file content to Groq."
+        },
+        "autoCommiter.maxCommitWords": {
+          "type": "number",
+          "default": 10,
+          "minimum": 3,
+          "description": "Maximum words allowed in the final commit message."
+        },
+        "autoCommiter.allowFallbackCommits": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow normalized fallback commit messages when Groq responses fail validation."
+        },
+        "autoCommiter.temperature": {
+          "type": "number",
+          "default": 0.2,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Temperature sent to the Groq chat completions API."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npm run compile",
+    "prepublishOnly": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.17",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.9.1",
+    "typescript": "^5.8.3"
+  }
+}
