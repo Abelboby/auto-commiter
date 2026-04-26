@@ -10,7 +10,7 @@ It is built for people who want a smoother commit workflow inside VS Code withou
 - Detects modified and untracked files in the current git repository
 - Sends each file diff or file content to Groq
 - Tries your configured models in order until one returns a valid commit message
-- Lets you review, edit, or skip files before committing
+- Lets you review, edit, or skip files directly inside the Activity Bar before committing
 - Stores the Groq API key in VS Code secret storage
 - Ships with free-tier-friendly default models from `groq-models.json`
 - Lets users edit model limits or add their own models later
@@ -39,9 +39,9 @@ When you run the commit command:
 
 1. The extension finds changed files.
 2. It generates a commit message for each file.
-3. It opens a review panel.
-4. You can edit any message or uncheck any file.
-5. Press `Commit Selected`.
+3. The sidebar fills with a review queue.
+4. You can edit any message or uncheck any file there.
+5. Press `Commit Selected` right inside the sidebar.
 
 ## Settings users can control
 
