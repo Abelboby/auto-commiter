@@ -2,9 +2,17 @@
   "name": "auto-commiter",
   "displayName": "Auto Commiter",
   "description": "Generate per-file git commit messages with Groq and commit them from VS Code.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "abelboby",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Abelboby/auto-commiter.git"
+  },
+  "homepage": "https://github.com/Abelboby/auto-commiter",
+  "bugs": {
+    "url": "https://github.com/Abelboby/auto-commiter/issues"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -15,10 +23,30 @@
   "activationEvents": [
     "onCommand:autoCommiter.runAutoCommit",
     "onCommand:autoCommiter.manageSettings",
-    "onCommand:autoCommiter.setGroqApiKey"
+    "onCommand:autoCommiter.setGroqApiKey",
+    "onCommand:autoCommiter.openOutput",
+    "onView:autoCommiter.sidebar"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "autoCommiter",
+          "title": "Auto Commiter",
+          "icon": "media/activity-bar.svg"
+        }
+      ]
+    },
+    "views": {
+      "autoCommiter": [
+        {
+          "id": "autoCommiter.sidebar",
+          "name": "Workspace",
+          "type": "webview"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "autoCommiter.runAutoCommit",
@@ -31,6 +59,10 @@
       {
         "command": "autoCommiter.setGroqApiKey",
         "title": "Auto Commiter: Set Groq API Key"
+      },
+      {
+        "command": "autoCommiter.openOutput",
+        "title": "Auto Commiter: Open Output"
       }
     ],
     "configuration": {
@@ -152,6 +184,10 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "npm run compile",
+    "package:vsix": "vsce package",
+    "publish:patch": "vsce publish patch",
+    "publish:minor": "vsce publish minor",
+    "publish:major": "vsce publish major",
     "prepublishOnly": "npm run compile"
   },
   "devDependencies": {
