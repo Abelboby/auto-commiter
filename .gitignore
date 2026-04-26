@@ -1,1 +1,7 @@
 .env
+.env.*
+node_modules
+.vscode
+.git
+*.vsix
+docs/
