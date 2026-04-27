@@ -37,7 +37,7 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
 
   async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
     this.currentView = webviewView;
-    webviewView.title = " ";
+    webviewView.title = "Auto Commiter";
     webviewView.webview.options = {
       enableScripts: true
     };
@@ -181,24 +181,24 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     :root {
-      --ac-bg: #131313;
-      --ac-top: #1e1e1e;
-      --ac-nav: #252526;
-      --ac-panel: #202020;
-      --ac-card: #252526;
-      --ac-card-hover: #313131;
-      --ac-input: #3c3c3c;
-      --ac-border: #303031;
-      --ac-border-strong: #404751;
-      --ac-text: #e5e2e1;
-      --ac-muted: #c0c7d3;
-      --ac-dim: #969696;
-      --ac-primary: #007acc;
-      --ac-primary-hover: #0062a3;
-      --ac-primary-soft: #00497d;
-      --ac-good: #10b981;
-      --ac-warn: #f59e0b;
-      --ac-error: #ffb4ab;
+      --ac-bg: var(--vscode-sideBar-background);
+      --ac-top: var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background));
+      --ac-nav: var(--vscode-sideBar-background);
+      --ac-panel: var(--vscode-sideBar-background);
+      --ac-card: var(--vscode-list-inactiveSelectionBackground, var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background)));
+      --ac-card-hover: var(--vscode-list-hoverBackground, var(--vscode-list-inactiveSelectionBackground));
+      --ac-input: var(--vscode-input-background);
+      --ac-border: var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+      --ac-border-strong: var(--vscode-input-border, var(--vscode-panel-border));
+      --ac-text: var(--vscode-sideBar-foreground, var(--vscode-foreground));
+      --ac-muted: var(--vscode-descriptionForeground);
+      --ac-dim: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+      --ac-primary: var(--vscode-button-background);
+      --ac-primary-hover: var(--vscode-button-hoverBackground);
+      --ac-primary-soft: var(--vscode-list-activeSelectionBackground, var(--vscode-button-background));
+      --ac-good: var(--vscode-testing-iconPassed, #10b981);
+      --ac-warn: var(--vscode-testing-iconQueued, #f59e0b);
+      --ac-error: var(--vscode-testing-iconFailed, #ffb4ab);
       --ac-radius-xs: 5px;
       --ac-radius-sm: 7px;
       --ac-radius-md: 10px;
@@ -247,41 +247,6 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       min-width: 0;
       background: var(--ac-bg);
     }
-    .topBar {
-      height: 36px;
-      flex: 0 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 0 10px;
-      border-bottom: 1px solid var(--ac-border);
-      background: var(--ac-top);
-    }
-    .brand {
-      min-width: 0;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #cccccc;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0;
-      text-transform: uppercase;
-    }
-    .brandIcon {
-      color: var(--ac-primary);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 17px;
-      height: 17px;
-    }
-    .iconActions {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-    }
     .iconButton {
       width: 24px;
       height: 24px;
@@ -290,7 +255,7 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       justify-content: center;
       border-radius: var(--ac-radius-xs);
       background: transparent;
-      color: #cccccc;
+      color: var(--ac-text);
       cursor: pointer;
       transition: background 120ms ease, color 120ms ease;
     }
@@ -309,8 +274,8 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       height: 13px;
     }
     .iconButton:hover {
-      background: #2a2d2e;
-      color: #ffffff;
+      background: var(--vscode-toolbar-hoverBackground, var(--ac-card-hover));
+      color: var(--ac-text);
     }
     .tabs {
       display: grid;
@@ -332,7 +297,7 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
     .tabActive {
       position: relative;
       background: color-mix(in srgb, #2a2d2e 88%, var(--ac-primary) 12%);
-      color: #ffffff;
+      color: var(--vscode-tab-activeForeground, var(--ac-text));
     }
     .tabActive::after {
       content: "";
@@ -360,7 +325,7 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       padding: 8px;
       border: 1px solid var(--ac-border);
       border-radius: var(--ac-radius-md);
-      background: #1b1b1c;
+      background: var(--ac-panel);
     }
     .keyDot {
       width: 8px;
@@ -439,7 +404,7 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
     }
     .mainButton {
       background: var(--ac-primary);
-      color: #ffffff;
+      color: var(--vscode-button-foreground);
     }
     .mainButton:hover {
       background: var(--ac-primary-hover);
@@ -447,11 +412,11 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
     .ghostButton {
       border: 1px solid transparent;
       background: transparent;
-      color: #cccccc;
+      color: var(--ac-muted);
     }
     .ghostButton:hover {
-      background: #2a2d2e;
-      color: #ffffff;
+      background: var(--vscode-toolbar-hoverBackground, var(--ac-card-hover));
+      color: var(--ac-text);
     }
     .sectionHeader {
       display: flex;
@@ -522,7 +487,7 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
     }
     .filePath {
       min-width: 0;
-      color: #9fcaff;
+      color: var(--vscode-textLink-foreground);
       font-family: "SF Mono", Consolas, monospace;
       font-size: 12px;
       line-height: 16px;
@@ -535,7 +500,7 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       padding: 0 4px;
       border-radius: 2px;
       background: var(--ac-primary-soft);
-      color: #9fcaff;
+      color: var(--vscode-textLink-foreground);
       font-size: 9px;
       font-weight: 700;
       line-height: 13px;
@@ -570,8 +535,8 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       opacity: 1;
     }
     .cardIcon:hover {
-      background: #2a2d2e;
-      color: #ffffff;
+      background: var(--vscode-toolbar-hoverBackground, var(--ac-card-hover));
+      color: var(--ac-text);
     }
     .removeButton:hover {
       color: var(--ac-error);
@@ -587,7 +552,7 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       border-radius: var(--ac-radius-sm);
       outline: none;
       background: var(--ac-input);
-      color: var(--ac-text);
+      color: var(--vscode-input-foreground);
       padding: 4px 22px 4px 6px;
       font-family: "SF Mono", Consolas, monospace;
       font-size: 12px;
@@ -640,17 +605,6 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
   <div class="shell">
-    <header class="topBar">
-      <div class="brand">
-        <span class="brandIcon">${iconSvg("terminal")}</span>
-        <span>AUTO COMMITER</span>
-      </div>
-      <div class="iconActions">
-        <button class="iconButton" data-action="apiKey" title="API Key" aria-label="API Key">${iconSvg("key")}</button>
-        <button class="iconButton" data-action="settings" title="Settings" aria-label="Settings">${iconSvg("settings")}</button>
-        <button class="iconButton" data-action="output" title="Output Log" aria-label="Output Log">${iconSvg("list")}</button>
-      </div>
-    </header>
     <nav class="tabs" aria-label="Auto Commiter sections">
       <div class="tab tabActive">Review</div>
       <div class="tab" title="History is not stored yet">History</div>
