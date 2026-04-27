@@ -120,6 +120,7 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
   setDoneState(message: string): void {
     this.state.stage = "done";
     this.state.statusMessage = message;
+    this.state.pendingCommits = [];
     this.render();
   }
 
@@ -423,7 +424,7 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      padding: 0 4px;
+      padding: 0 4px 6px;
     }
     .sectionTitle {
       min-width: 0;
@@ -448,12 +449,12 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
     }
     .reviewList {
       display: grid;
-      gap: 4px;
+      gap: 8px;
     }
     .commitCard {
       display: grid;
-      gap: 4px;
-      padding: 8px;
+      gap: 8px;
+      padding: 10px;
       border: 1px solid var(--ac-border);
       border-left: 2px solid var(--ac-primary-soft);
       border-radius: var(--ac-radius-sm);
