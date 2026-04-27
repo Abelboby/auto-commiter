@@ -42,7 +42,7 @@
       "autoCommiter": [
         {
           "id": "autoCommiter.sidebar",
-          "name": "Review",
+          "name": "Auto Commiter",
           "type": "webview"
         }
       ]
@@ -54,17 +54,39 @@
       },
       {
         "command": "autoCommiter.manageSettings",
-        "title": "Auto Commiter: Manage Models and Settings"
+        "title": "Auto Commiter: Manage Models and Settings",
+        "icon": "$(gear)"
       },
       {
         "command": "autoCommiter.setGroqApiKey",
-        "title": "Auto Commiter: Set Groq API Key"
+        "title": "Auto Commiter: Set Groq API Key",
+        "icon": "$(key)"
       },
       {
         "command": "autoCommiter.openOutput",
-        "title": "Auto Commiter: Open Output"
+        "title": "Auto Commiter: Open Output",
+        "icon": "$(list-unordered)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "autoCommiter.setGroqApiKey",
+          "when": "view == autoCommiter.sidebar",
+          "group": "navigation@1"
+        },
+        {
+          "command": "autoCommiter.manageSettings",
+          "when": "view == autoCommiter.sidebar",
+          "group": "navigation@2"
+        },
+        {
+          "command": "autoCommiter.openOutput",
+          "when": "view == autoCommiter.sidebar",
+          "group": "navigation@3"
+        }
+      ]
+    },
     "configuration": {
       "title": "Auto Commiter",
       "properties": {
