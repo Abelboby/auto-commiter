@@ -1,6 +1,13 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M22 26C22 21.5817 25.5817 18 30 18H98C102.418 18 106 21.5817 106 26V82C106 86.4183 102.418 90 98 90H63L42 110V90H30C25.5817 90 22 86.4183 22 82V26Z" fill="#C5C5C5"/>
-  <path d="M39 48H89" stroke="#1E1E1E" stroke-width="10" stroke-linecap="round"/>
-  <path d="M39 66H73" stroke="#1E1E1E" stroke-width="10" stroke-linecap="round"/>
-  <path d="M83 58L95 70L109 42" stroke="#1E1E1E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<rect width="128" height="128" fill="black"/>
+<path d="M63.8831 62.5781C74.0788 62.5781 82.3439 70.8434 82.344 81.0391C82.344 91.2348 74.0788 99.5 63.8831 99.5C53.6874 99.4999 45.4221 91.2348 45.4221 81.0391C45.4222 70.8434 53.6874 62.5782 63.8831 62.5781Z" fill="white" stroke="white"/>
+<path d="M63.8831 90.5196C69.1191 90.5196 73.3636 86.2751 73.3636 81.0391C73.3636 75.8032 69.1191 71.5586 63.8831 71.5586C58.6472 71.5586 54.4026 75.8032 54.4026 81.0391C54.4026 86.2751 58.6472 90.5196 63.8831 90.5196Z" fill="black"/>
+<path d="M7 81.0391H44.9221" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M82.8442 81.0391H120.766" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M75.2598 65.8702L98.013 39.3247" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+<path d="M63.8831 62.0779V31.7402" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+<path d="M52.5064 65.8702L29.7532 39.3247" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+<path d="M98.0129 35.0845C100.355 35.0845 102.253 36.9829 102.253 39.3247C102.253 41.6665 100.355 43.5649 98.0129 43.5649C95.6711 43.5649 93.7727 41.6665 93.7727 39.3247C93.7727 36.9829 95.6711 35.0845 98.0129 35.0845Z" fill="white" stroke="white"/>
+<path d="M63.8831 27.5C66.2249 27.5 68.1233 29.3984 68.1233 31.7402C68.1233 34.0821 66.2249 35.9805 63.8831 35.9805C61.5412 35.9805 59.6428 34.0821 59.6428 31.7402C59.6428 29.3984 61.5412 27.5 63.8831 27.5Z" fill="white" stroke="white"/>
+<path d="M29.7532 35.0845C32.095 35.0845 33.9934 36.9829 33.9934 39.3247C33.9934 41.6665 32.095 43.5649 29.7532 43.5649C27.4114 43.5649 25.5129 41.6665 25.5129 39.3247C25.513 36.9829 27.4114 35.0845 29.7532 35.0845Z" fill="white" stroke="white"/>
 </svg>
