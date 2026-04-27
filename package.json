@@ -42,7 +42,7 @@
       "autoCommiter": [
         {
           "id": "autoCommiter.sidebar",
-          "name": "Workspace",
+          "name": "Review",
           "type": "webview"
         }
       ]
