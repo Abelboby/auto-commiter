@@ -40,13 +40,16 @@ export function activate(context: vscode.ExtensionContext): void {
       }
 
       await context.secrets.store(SECRET_KEY, value.trim());
+      await sidebarProvider.refreshSettingsState();
       vscode.window.showInformationMessage("Groq API key saved in VS Code secret storage.");
     })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand("autoCommiter.manageSettings", async () => {
-      await openSettingsPanel(context);
+      await openSettingsPanel(context, OUTPUT_CHANNEL, async () => {
+        await sidebarProvider.refreshSettingsState();
+      });
     })
   );
 
@@ -131,6 +134,14 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("autoCommiter.runAutoCommit", async () => {
       await runAutoCommit(context, sidebarProvider);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("autoCommiter.commitMode")) {
+        void sidebarProvider.refreshSettingsState();
+      }
     })
   );
 
@@ -398,7 +409,7 @@ async function ensureApiKey(context: vscode.ExtensionContext): Promise<string | 
   }
 
   if (answer === "Open Settings") {
-    await openSettingsPanel(context);
+    await openSettingsPanel(context, OUTPUT_CHANNEL);
   }
 
   return (await context.secrets.get(SECRET_KEY))?.trim();
