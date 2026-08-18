@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.1.3
+
+- Updated default model routing to match the six-model Groq setup with adjusted per-run call limits
+
+## 0.1.2
+
+- Fixed GPT-OSS commit message generation by using hidden low-effort reasoning and a larger completion budget
+- Updated default model routing to the current Groq model list used for commit message generation
+
 ## 0.1.1
 
 - Added an Activity Bar sidebar with quick actions for running commits, opening settings, setting the API key, and viewing logs
