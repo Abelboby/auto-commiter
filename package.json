@@ -22,10 +22,13 @@
     "SCM"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:autoCommiter.runAutoCommit",
     "onCommand:autoCommiter.manageSettings",
     "onCommand:autoCommiter.setGroqApiKey",
     "onCommand:autoCommiter.openOutput",
+    "onCommand:autoCommiter.checkForUpdates",
+    "onCommand:autoCommiter.installUpdate",
     "onView:autoCommiter.sidebar"
   ],
   "main": "./out/extension.js",
@@ -67,6 +70,16 @@
         "command": "autoCommiter.openOutput",
         "title": "Auto Commiter: Open Output",
         "icon": "$(list-unordered)"
+      },
+      {
+        "command": "autoCommiter.checkForUpdates",
+        "title": "Auto Commiter: Check for Updates",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "autoCommiter.installUpdate",
+        "title": "Auto Commiter: Install Update",
+        "icon": "$(cloud-download)"
       }
     ],
     "menus": {
