@@ -91,6 +91,15 @@
     "configuration": {
       "title": "Auto Commiter",
       "properties": {
+        "autoCommiter.commitMode": {
+          "type": "string",
+          "enum": [
+            "single",
+            "batch"
+          ],
+          "default": "single",
+          "description": "Commit mode used by the sidebar. Single generates one commit per file; batch will generate one commit for the selected files."
+        },
         "autoCommiter.models": {
           "type": "array",
           "default": [
