@@ -141,6 +141,10 @@ class AutoCommiterSidebarProvider {
         this.state.apiKeyConfigured = Boolean((await this.context.secrets.get(config_1.SECRET_KEY))?.trim());
         this.state.commitMode = (0, config_1.getSettings)().commitMode;
     }
+    async refreshSettingsState() {
+        await this.refreshApiKeyState();
+        this.render();
+    }
     setUpdateChecking() {
         this.state.update = {
             ...this.state.update,
@@ -311,6 +315,7 @@ class AutoCommiterSidebarProvider {
                         : "Checking Updates";
         const canInstallUpdate = this.state.update.status === "available";
         const canOpenRelease = Boolean(this.state.update.releaseUrl);
+        const showSidebarUpdate = this.state.update.status === "available" || this.state.update.status === "installing";
         const statusLabel = (() => {
             if (this.state.stage === "review") {
                 return "Ready";
@@ -911,7 +916,7 @@ class AutoCommiterSidebarProvider {
           <button class="modeButton" data-mode="batch" data-active="${this.state.commitMode === "batch"}" type="button">Batch</button>
         </div>
         <p class="statusMessage">${escapeHtml(displayStatusMessage)}</p>
-        <section class="updatePanel" aria-label="Extension update status">
+        ${showSidebarUpdate ? `<section class="updatePanel" aria-label="Extension update status">
           <div class="updateTop">
             <span class="updateDot" data-tone="${updateTone}"></span>
             <span class="updateTitle">${escapeHtml(updateTitle)}</span>
@@ -932,7 +937,7 @@ class AutoCommiterSidebarProvider {
               <span>Release</span>
             </button>
           </div>
-        </section>
+        </section>` : ""}
         <button class="mainButton" data-action="run" ${this.state.stage === "generating" || this.state.stage === "committing" ? "disabled" : ""}>
           <span>${this.state.stage === "generating" ? iconSvg("loader") : iconSvg("sparkle")}</span>
           <span>${generateButtonText}</span>
