@@ -16,7 +16,16 @@ export interface CandidateCommit {
   isFallback: boolean;
 }
 
+export interface BatchCommit {
+  filePaths: string[];
+  message: string;
+  isFallback: boolean;
+}
+
+export type CommitMode = "single" | "batch";
+
 export interface ExtensionSettingsSnapshot {
+  commitMode: CommitMode;
   allowFallbackCommits: boolean;
   maxDiffCharacters: number;
   maxCommitWords: number;
