@@ -2,13 +2,31 @@ import * as vscode from "vscode";
 import * as https from "https";
 import { DEFAULT_MODELS } from "./defaults";
 import { getSettings, saveModels, saveSimpleSettings, SECRET_KEY } from "./config";
-import { ConfiguredModel } from "./types";
+import { CommitMode, ConfiguredModel } from "./types";
+import { checkForUpdate, installUpdate, UpdateCheckResult } from "./updater";
 
 function getNonce(): string {
   return Math.random().toString(36).slice(2);
 }
 
-export async function openSettingsPanel(context: vscode.ExtensionContext): Promise<void> {
+type SettingsUpdateState = UpdateCheckResult | {
+  readonly status: "idle" | "checking" | "installing" | "installed";
+  readonly message: string;
+  readonly currentVersion?: string;
+  readonly latestVersion?: string;
+  readonly releaseUrl?: string;
+};
+
+export async function openSettingsPanel(
+  context: vscode.ExtensionContext,
+  outputChannel: vscode.OutputChannel,
+  onSaved?: () => Promise<void>
+): Promise<void> {
+  let updateState: SettingsUpdateState = {
+    status: "idle",
+    message: "Check GitHub Releases for a newer VSIX."
+  };
+
   const panel = vscode.window.createWebviewPanel(
     "autoCommiterSettings",
     "Auto Commiter Settings",
@@ -30,6 +48,7 @@ export async function openSettingsPanel(context: vscode.ExtensionContext): Promi
       nonce,
       apiKey,
       settings,
+      updateState,
       codiconCssUri: codiconCssUri.toString(),
       cspSource: panel.webview.cspSource
     });
@@ -47,6 +66,7 @@ export async function openSettingsPanel(context: vscode.ExtensionContext): Promi
       apiKey?: string;
       models?: ConfiguredModel[];
       settings?: {
+        commitMode: CommitMode;
         allowFallbackCommits: boolean;
         maxDiffCharacters: number;
         maxCommitWords: number;
@@ -65,8 +85,72 @@ export async function openSettingsPanel(context: vscode.ExtensionContext): Promi
       await context.secrets.store(SECRET_KEY, typedMessage.apiKey?.trim() ?? "");
       await saveModels(typedMessage.models);
       await saveSimpleSettings(typedMessage.settings);
+      await onSaved?.();
       vscode.window.showInformationMessage("Auto Commiter settings saved.");
       await render();
+    }
+
+    if (typedMessage.type === "check-update") {
+      updateState = {
+        status: "checking",
+        message: "Checking GitHub Releases."
+      };
+      await render();
+      updateState = await checkForUpdate(context);
+      await render();
+    }
+
+    if (typedMessage.type === "install-update") {
+      const update = updateState.status === "available"
+        ? updateState
+        : await checkForUpdate(context);
+
+      if (update.status !== "available") {
+        updateState = update;
+        await render();
+        vscode.window.showInformationMessage(update.message);
+        return;
+      }
+
+      try {
+        updateState = {
+          ...update,
+          status: "installing",
+          message: `Installing v${update.latestVersion}.`
+        };
+        await render();
+        await installUpdate(context, update, outputChannel);
+        updateState = {
+          ...update,
+          status: "installed",
+          message: `Installed v${update.latestVersion}. Reload VS Code to use it.`
+        };
+        await render();
+
+        const reload = await vscode.window.showInformationMessage(
+          `Auto Commiter v${update.latestVersion} was installed. Reload VS Code to use it.`,
+          "Reload Window"
+        );
+
+        if (reload === "Reload Window") {
+          await vscode.commands.executeCommand("workbench.action.reloadWindow");
+        }
+      } catch (error) {
+        updateState = {
+          ...update,
+          status: "error",
+          message: error instanceof Error ? error.message : String(error)
+        };
+        await render();
+        vscode.window.showErrorMessage(`Auto Commiter update failed: ${updateState.message}`);
+      }
+    }
+
+    if (typedMessage.type === "open-release") {
+      const releaseUrl = updateState.releaseUrl;
+      if (releaseUrl) {
+        await vscode.env.openExternal(vscode.Uri.parse(releaseUrl));
+      }
     }
 
     if (typedMessage.type === "reset-models") {
@@ -124,9 +208,22 @@ function getHtml(input: {
   nonce: string;
   apiKey: string;
   settings: ReturnType<typeof getSettings>;
+  updateState: SettingsUpdateState;
   codiconCssUri: string;
   cspSource: string;
 }): string {
+  const updateTitle = getUpdateTitle(input.updateState);
+  const updateTone = input.updateState.status === "available"
+    ? "available"
+    : input.updateState.status === "error"
+      ? "error"
+      : input.updateState.status === "checking" || input.updateState.status === "installing"
+        ? "busy"
+        : "current";
+  const canInstallUpdate = input.updateState.status === "available";
+  const canUseUpdateActions = input.updateState.status !== "checking" && input.updateState.status !== "installing";
+  const canOpenRelease = Boolean(input.updateState.releaseUrl);
+
   return `<!DOCTYPE html>
 <html class="dark" lang="en">
 <head>
@@ -401,6 +498,71 @@ function getHtml(input: {
     .status.error .dot {
       background: var(--danger);
     }
+    .segmented {
+      background: var(--input);
+      border: 1px solid var(--outline);
+      border-radius: var(--radius-md);
+      display: grid;
+      gap: 2px;
+      grid-template-columns: 1fr 1fr;
+      padding: 2px;
+      max-width: 360px;
+    }
+    .segment-button {
+      background: transparent;
+      color: var(--on-muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .segment-button:hover {
+      background: var(--surface-variant);
+    }
+    .segment-button.active {
+      background: var(--primary);
+      color: var(--on-primary);
+    }
+    .update-card {
+      background: var(--input);
+      border: 1px solid var(--outline);
+      border-radius: var(--radius-md);
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+    }
+    .update-head {
+      align-items: center;
+      display: flex;
+      gap: 8px;
+      min-width: 0;
+    }
+    .update-dot {
+      background: var(--success);
+      border-radius: var(--radius-pill);
+      height: 8px;
+      width: 8px;
+    }
+    .update-dot[data-tone="available"] {
+      background: var(--vscode-testing-iconQueued, #f59e0b);
+    }
+    .update-dot[data-tone="busy"] {
+      background: var(--primary);
+    }
+    .update-dot[data-tone="error"] {
+      background: var(--danger);
+    }
+    .update-title {
+      color: var(--on-surface);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 16px;
+    }
+    .update-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
     .models {
       display: grid;
       gap: 2px;
@@ -659,6 +821,33 @@ function getHtml(input: {
       </div>
     </div>
 
+    <div class="section" data-section="commit mode">
+      <h2>Commit Mode</h2>
+      <div class="row">
+        <div class="segmented" role="group" aria-label="Commit mode">
+          <button class="segment-button ${input.settings.commitMode === "single" ? "active" : ""}" data-mode="single" type="button">Single</button>
+          <button class="segment-button ${input.settings.commitMode === "batch" ? "active" : ""}" data-mode="batch" type="button">Batch</button>
+        </div>
+        <p class="muted" id="modeDescription">${input.settings.commitMode === "batch" ? "Generate one message for all selected files." : "Review, edit, and commit selected files."}</p>
+      </div>
+    </div>
+
+    <div class="section" data-section="updates">
+      <h2>Updates</h2>
+      <div class="update-card">
+        <div class="update-head">
+          <span class="update-dot" data-tone="${updateTone}"></span>
+          <span class="update-title">${escapeHtml(updateTitle)}</span>
+        </div>
+        <p class="muted">${escapeHtml(input.updateState.message)}</p>
+        <div class="update-actions">
+          <button class="reset-button" id="checkUpdate" type="button" ${canUseUpdateActions ? "" : "disabled"}>Check Updates</button>
+          <button class="action-button" id="installUpdate" type="button" ${canInstallUpdate ? "" : "disabled"}>Install Update</button>
+          <button class="reset-button" id="openRelease" type="button" ${canOpenRelease ? "" : "disabled"}>Open Release</button>
+        </div>
+      </div>
+    </div>
+
     <div class="section" data-section="models">
       <h2>Models</h2>
       <div class="models" id="models"></div>
@@ -713,6 +902,7 @@ function getHtml(input: {
     const vscode = acquireVsCodeApi();
     const models = ${JSON.stringify(input.settings.models)};
     const defaultModels = ${JSON.stringify(DEFAULT_MODELS)};
+    let commitMode = ${JSON.stringify(input.settings.commitMode)};
     let tags = ${JSON.stringify(input.settings.commitTagOptions)};
     let allowFallbackCommits = ${JSON.stringify(input.settings.allowFallbackCommits)};
     let dirty = false;
@@ -741,6 +931,15 @@ function getHtml(input: {
       const status = document.getElementById("apiKeyStatus");
       status.className = "status " + (ok ? "ok" : "error");
       status.querySelector("span:last-child").textContent = message;
+    }
+
+    function syncModeButtons() {
+      document.querySelectorAll(".segment-button[data-mode]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.mode === commitMode);
+      });
+      document.getElementById("modeDescription").textContent = commitMode === "batch"
+        ? "Generate one message for all selected files."
+        : "Review, edit, and commit selected files.";
     }
 
     function refreshModelOrder() {
@@ -951,9 +1150,11 @@ function getHtml(input: {
       document.getElementById("temperature").value = "0.2";
       document.getElementById("temperatureValue").textContent = "0.2";
       allowFallbackCommits = true;
+      commitMode = "single";
       document.getElementById("allowFallbackCommits").classList.add("active");
       document.getElementById("allowFallbackCommits").setAttribute("aria-pressed", "true");
       markDirty();
+      syncModeButtons();
       renderModels();
       renderTags();
     });
@@ -965,6 +1166,7 @@ function getHtml(input: {
         apiKey: document.getElementById("apiKey").value,
         models,
         settings: {
+          commitMode,
           allowFallbackCommits,
           maxDiffCharacters: Number(document.getElementById("maxDiffCharacters").value),
           maxCommitWords: Number(document.getElementById("maxCommitWords").value),
@@ -978,6 +1180,26 @@ function getHtml(input: {
     document.getElementById("verifyApiKey").addEventListener("click", () => {
       setStatus(false, "Verifying...");
       vscode.postMessage({ type: "verify-api-key", apiKey: document.getElementById("apiKey").value });
+    });
+
+    document.querySelectorAll(".segment-button[data-mode]").forEach((button) => {
+      button.addEventListener("click", () => {
+        commitMode = button.dataset.mode === "batch" ? "batch" : "single";
+        syncModeButtons();
+        markDirty();
+      });
+    });
+
+    document.getElementById("checkUpdate").addEventListener("click", () => {
+      vscode.postMessage({ type: "check-update" });
+    });
+
+    document.getElementById("installUpdate").addEventListener("click", () => {
+      vscode.postMessage({ type: "install-update" });
+    });
+
+    document.getElementById("openRelease").addEventListener("click", () => {
+      vscode.postMessage({ type: "open-release" });
     });
 
     document.getElementById("toggleApiKey").addEventListener("click", () => {
@@ -1019,9 +1241,38 @@ function getHtml(input: {
 
     renderTags();
     renderModels();
+    syncModeButtons();
   </script>
 </body>
 </html>`;
+}
+
+function getUpdateTitle(updateState: SettingsUpdateState): string {
+  if (updateState.status === "available") {
+    return `Update v${updateState.latestVersion ?? ""}`.trim();
+  }
+
+  if (updateState.status === "current") {
+    return "Extension Up To Date";
+  }
+
+  if (updateState.status === "checking") {
+    return "Checking Updates";
+  }
+
+  if (updateState.status === "installing") {
+    return "Installing Update";
+  }
+
+  if (updateState.status === "installed") {
+    return "Update Installed";
+  }
+
+  if (updateState.status === "error") {
+    return "Update Check Failed";
+  }
+
+  return "GitHub Release Updates";
 }
 
 function escapeHtml(value: string): string {
