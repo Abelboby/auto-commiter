@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SECRET_KEY = void 0;
 exports.getSettings = getSettings;
+exports.saveCommitMode = saveCommitMode;
 exports.saveModels = saveModels;
 exports.saveSimpleSettings = saveSimpleSettings;
 const vscode = __importStar(require("vscode"));
@@ -53,9 +54,13 @@ function normalizeModels(models) {
     }))
         .filter((model) => model.id.length > 0 && model.maxCallsPerRun > 0);
 }
+function normalizeCommitMode(value) {
+    return value === "batch" ? "batch" : "single";
+}
 function getSettings() {
     const config = vscode.workspace.getConfiguration(SECTION);
     return {
+        commitMode: normalizeCommitMode(config.get("commitMode", "single")),
         allowFallbackCommits: config.get("allowFallbackCommits", true),
         maxDiffCharacters: config.get("maxDiffCharacters", 4000),
         maxCommitWords: config.get("maxCommitWords", 10),
@@ -63,6 +68,11 @@ function getSettings() {
         commitTagOptions: config.get("commitTagOptions", defaults_1.DEFAULT_COMMIT_TAGS),
         models: normalizeModels(config.get("models", defaults_1.DEFAULT_MODELS))
     };
+}
+async function saveCommitMode(mode) {
+    await vscode.workspace
+        .getConfiguration(SECTION)
+        .update("commitMode", normalizeCommitMode(mode), vscode.ConfigurationTarget.Global);
 }
 async function saveModels(models) {
     await vscode.workspace
