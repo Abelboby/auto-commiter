@@ -1,105 +1,70 @@
 # Auto Commiter
 
-Auto Commiter is a Visual Studio Code extension that looks at your changed and untracked files, asks Groq for short per-file commit messages, lets you review or edit those messages, and then creates one git commit per file.
+For when your code is good, your git status is dramatic, and your brain can only offer "final final changes v3".
 
-It is built for people who want a smoother commit workflow inside VS Code without depending on a local PowerShell script.
+Auto Commiter is the aggressively helpful VS Code extension for devs who ship features at 2 AM and then stare at `git diff` like it owes them money. It scans your changed and untracked files, asks Groq for short commit messages, lets you review the results, and commits from inside the sidebar.
 
-## What it does
-
-- Adds an Activity Bar entry so the extension is always easy to reach
-- Detects modified and untracked files in the current git repository
-- Sends each file diff or file content to Groq
-- Tries your configured models in order until one returns a valid commit message
-- Lets you review, edit, or skip files directly inside the Activity Bar before committing
-- Stores the Groq API key in VS Code secret storage
-- Ships with free-tier-friendly default models from `groq-models.json`
-- Lets users edit model limits or add their own models later
-
-## Commands
-
-- `Auto Commiter: Generate and Commit Changes`
-- `Auto Commiter: Manage Models and Settings`
-- `Auto Commiter: Set Groq API Key`
-- `Auto Commiter: Open Output`
+It can create one commit per file or one batch commit for the selected changes. Basically: less "what did I even change?" and more "clean commits, main-character energy".
 
 ## Install from GitHub Releases
 
-If you have GitHub CLI and the VS Code `code` command available, install the latest release with one command:
+Pick the one-liner that matches your setup.
 
-```bash
-gh release download --repo Abelboby/auto-commiter --pattern auto-commiter.vsix --output auto-commiter.vsix && code --install-extension auto-commiter.vsix --force
-```
-
-Without GitHub CLI, download the latest VSIX directly.
-
-macOS or Linux:
-
-```bash
-curl -L -o auto-commiter.vsix https://github.com/Abelboby/auto-commiter/releases/latest/download/auto-commiter.vsix && code --install-extension auto-commiter.vsix --force
-```
-
-Windows PowerShell:
+### Windows PowerShell
 
 ```powershell
 curl.exe -L -o auto-commiter.vsix https://github.com/Abelboby/auto-commiter/releases/latest/download/auto-commiter.vsix; if ($LASTEXITCODE -eq 0) { code --install-extension auto-commiter.vsix --force }
 ```
 
-## First-time setup
+### macOS or Linux
 
-1. Install the extension.
-2. Run `Auto Commiter: Manage Models and Settings`.
-3. Paste your Groq API key.
-4. Review the default models and settings.
-5. Save.
-6. Open the Auto Commiter icon in the Activity Bar.
-7. Open a git repo with changes.
-8. Click `Generate And Commit Changes`.
+```bash
+curl -L -o auto-commiter.vsix https://github.com/Abelboby/auto-commiter/releases/latest/download/auto-commiter.vsix && code --install-extension auto-commiter.vsix --force
+```
 
-## Review flow
+### GitHub CLI
 
-When you run the commit command:
+```bash
+gh release download --repo Abelboby/auto-commiter --pattern auto-commiter.vsix --output auto-commiter.vsix && code --install-extension auto-commiter.vsix --force
+```
 
-1. The extension finds changed files.
-2. It generates a commit message for each file.
-3. The sidebar fills with a review queue.
-4. You can edit any message or uncheck any file there.
-5. Press `Commit Selected` right inside the sidebar.
+After installing, reload VS Code if it asks.
 
-## Settings users can control
+## Daily Workflow
 
-- Groq API key
-- Model list
-- Per-model call limits
-- Enabled or disabled models
-- Commit tag prefixes
-- Max diff size
-- Max commit words
-- Temperature
-- Whether fallback commit messages are allowed
+1. Make changes in a git repo.
+2. Open the Auto Commiter sidebar.
+3. Generate commit messages.
+4. Edit anything that needs a human touch.
+5. Commit selected files in `Single` or `Batch` mode.
+
+Choose your chaos level. Tiny file-by-file commits, or one clean "ship it" batch.
+
+## What it does
+
+- Turns changed files into reviewable Groq-generated commit messages
+- Lets you edit, skip, and commit from one VS Code sidebar
+- Supports `Single` commits and `Batch` commits
+- Stores your API key safely in VS Code Secret Storage
+
+## First-Time Setup
+
+1. Open VS Code.
+2. Open the Auto Commiter icon in the Activity Bar.
+3. Click the settings icon.
+4. Add your Groq API key.
+5. Choose `Single` or `Batch`.
+6. Generate, review, and commit.
+
+Congrats. Your commit workflow now has fewer side quests.
+
+## Update Behavior
+
+Auto Commiter checks the latest GitHub Release and shows update actions in the sidebar when a newer VSIX is available. The update installer downloads the release asset and installs it through the VS Code CLI, because manually refreshing release pages is not a personality trait.
+
+You can also reinstall manually at any time with one of the commands above.
 
 ## Notes
 
-- The extension commits files one by one, because that is the workflow defined by the original script.
-- Fallback messages are marked in the review UI.
-- The extension does not use `.env` or PowerShell at runtime.
-
-## Updating the extension later
-
-Use the built-in scripts when you want to ship a new version:
-
-```powershell
-npm.cmd run compile
-npm.cmd run package:vsix
-npm.cmd run publish:patch
-```
-
-You can also use `publish:minor` or `publish:major` depending on the type of release.
-
-## Development
-
-```powershell
-npm.cmd install
-npm.cmd run compile
-```
-
-Press `F5` in VS Code to launch the Extension Development Host.
+- Generated fallback messages are marked in review so you can decide whether to use them.
+- Always review AI-generated commit messages before committing. Future-you is the actual target audience, and future-you has receipts.
