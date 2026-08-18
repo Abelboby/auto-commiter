@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.1.11
+
+- Updated CHANGELOG.md to include new features and improvements for versions 0.1.10 to 0.1.4
+
 ## 0.1.10
 
 - Added release workflow automation to write generated release notes into `CHANGELOG.md`

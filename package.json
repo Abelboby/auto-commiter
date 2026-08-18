@@ -2,7 +2,7 @@
   "name": "auto-commiter",
   "displayName": "Auto Commiter",
   "description": "Generate per-file git commit messages with Groq and commit them from VS Code.",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "publisher": "abelboby",
   "icon": "media/activity-bar.png",
   "license": "MIT",
