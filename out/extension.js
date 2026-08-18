@@ -65,10 +65,13 @@ function activate(context) {
             return;
         }
         await context.secrets.store(config_1.SECRET_KEY, value.trim());
+        await sidebarProvider.refreshSettingsState();
         vscode.window.showInformationMessage("Groq API key saved in VS Code secret storage.");
     }));
     context.subscriptions.push(vscode.commands.registerCommand("autoCommiter.manageSettings", async () => {
-        await (0, settingsPanel_1.openSettingsPanel)(context);
+        await (0, settingsPanel_1.openSettingsPanel)(context, OUTPUT_CHANNEL, async () => {
+            await sidebarProvider.refreshSettingsState();
+        });
     }));
     context.subscriptions.push(vscode.commands.registerCommand("autoCommiter.openOutput", async () => {
         OUTPUT_CHANNEL.show(true);
@@ -130,6 +133,11 @@ function activate(context) {
     }));
     context.subscriptions.push(vscode.commands.registerCommand("autoCommiter.runAutoCommit", async () => {
         await runAutoCommit(context, sidebarProvider);
+    }));
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration("autoCommiter.commitMode")) {
+            void sidebarProvider.refreshSettingsState();
+        }
     }));
     void performUpdateCheck(false);
 }
@@ -331,7 +339,7 @@ async function ensureApiKey(context) {
         await vscode.commands.executeCommand("autoCommiter.setGroqApiKey");
     }
     if (answer === "Open Settings") {
-        await (0, settingsPanel_1.openSettingsPanel)(context);
+        await (0, settingsPanel_1.openSettingsPanel)(context, OUTPUT_CHANNEL);
     }
     return (await context.secrets.get(config_1.SECRET_KEY))?.trim();
 }
