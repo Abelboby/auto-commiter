@@ -2,6 +2,7 @@
 .env.*
 node_modules
 .vscode
+.github
 .git
 *.vsix
 docs/

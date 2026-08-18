@@ -81,6 +81,7 @@ async function saveModels(models) {
 }
 async function saveSimpleSettings(input) {
     const config = vscode.workspace.getConfiguration(SECTION);
+    await config.update("commitMode", normalizeCommitMode(input.commitMode), vscode.ConfigurationTarget.Global);
     await config.update("allowFallbackCommits", input.allowFallbackCommits, vscode.ConfigurationTarget.Global);
     await config.update("maxDiffCharacters", input.maxDiffCharacters, vscode.ConfigurationTarget.Global);
     await config.update("maxCommitWords", input.maxCommitWords, vscode.ConfigurationTarget.Global);

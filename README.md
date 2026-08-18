@@ -22,6 +22,28 @@ It is built for people who want a smoother commit workflow inside VS Code withou
 - `Auto Commiter: Set Groq API Key`
 - `Auto Commiter: Open Output`
 
+## Install from GitHub Releases
+
+If you have GitHub CLI and the VS Code `code` command available, install the latest release with one command:
+
+```bash
+gh release download --repo Abelboby/auto-commiter --pattern auto-commiter.vsix --output auto-commiter.vsix && code --install-extension auto-commiter.vsix --force
+```
+
+Without GitHub CLI, download the latest VSIX directly.
+
+macOS or Linux:
+
+```bash
+curl -L -o auto-commiter.vsix https://github.com/Abelboby/auto-commiter/releases/latest/download/auto-commiter.vsix && code --install-extension auto-commiter.vsix --force
+```
+
+Windows PowerShell:
+
+```powershell
+curl.exe -L -o auto-commiter.vsix https://github.com/Abelboby/auto-commiter/releases/latest/download/auto-commiter.vsix; if ($LASTEXITCODE -eq 0) { code --install-extension auto-commiter.vsix --force }
+```
+
 ## First-time setup
 
 1. Install the extension.

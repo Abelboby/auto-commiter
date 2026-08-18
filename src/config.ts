@@ -49,6 +49,7 @@ export async function saveModels(models: ConfiguredModel[]): Promise<void> {
 }
 
 export async function saveSimpleSettings(input: {
+  commitMode: CommitMode;
   allowFallbackCommits: boolean;
   maxDiffCharacters: number;
   maxCommitWords: number;
@@ -56,6 +57,7 @@ export async function saveSimpleSettings(input: {
   commitTagOptions: string[];
 }): Promise<void> {
   const config = vscode.workspace.getConfiguration(SECTION);
+  await config.update("commitMode", normalizeCommitMode(input.commitMode), vscode.ConfigurationTarget.Global);
   await config.update("allowFallbackCommits", input.allowFallbackCommits, vscode.ConfigurationTarget.Global);
   await config.update("maxDiffCharacters", input.maxDiffCharacters, vscode.ConfigurationTarget.Global);
   await config.update("maxCommitWords", input.maxCommitWords, vscode.ConfigurationTarget.Global);

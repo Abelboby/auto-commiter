@@ -80,7 +80,8 @@ jobs:
         run: |
           VSIX="auto-commiter-${{ steps.version.outputs.value }}.vsix"
           test -f "$VSIX"
-          echo "path=$VSIX" >> "$GITHUB_OUTPUT"
+          cp "$VSIX" auto-commiter.vsix
+          echo "path=auto-commiter.vsix" >> "$GITHUB_OUTPUT"
 
       - name: Commit version bump
         run: |
