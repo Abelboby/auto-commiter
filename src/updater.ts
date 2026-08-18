@@ -280,7 +280,10 @@ async function runCodeCli(
   outputChannel: vscode.OutputChannel
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = cp.spawn(cliPath, [...args], {
+    const command = getSpawnCommand(cliPath, args);
+    outputChannel.appendLine(`Running VS Code CLI: ${command.display}`);
+
+    const child = cp.spawn(command.file, command.args, {
       cwd: os.homedir(),
       windowsHide: true
     });
@@ -297,4 +300,26 @@ async function runCodeCli(
       reject(new Error(`VS Code CLI exited with code ${code ?? "unknown"}.`));
     });
   });
+}
+
+function getSpawnCommand(
+  cliPath: string,
+  args: ReadonlyArray<string>
+): { readonly file: string; readonly args: string[]; readonly display: string } {
+  const isWindowsCommandScript = process.platform === "win32"
+    && /\.(?:cmd|bat)$/i.test(cliPath);
+
+  if (!isWindowsCommandScript) {
+    return {
+      file: cliPath,
+      args: [...args],
+      display: [cliPath, ...args].join(" ")
+    };
+  }
+
+  return {
+    file: process.env.ComSpec || "cmd.exe",
+    args: ["/d", "/c", "call", cliPath, ...args],
+    display: [cliPath, ...args].join(" ")
+  };
 }
