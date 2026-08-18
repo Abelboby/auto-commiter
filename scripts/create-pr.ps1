@@ -1,6 +1,7 @@
 param(
     [string]$Base = "main",
     [switch]$DryRun,
+    [switch]$Fast,
     [switch]$SkipChecks,
     [switch]$SkipPush
 )
@@ -97,6 +98,20 @@ function Read-WithDefault {
         return $DefaultValue
     }
     return $answer.Trim()
+}
+
+function Read-CreateConfirmation {
+    $answer = (Read-Host "Create the PR now? Press Enter for yes").Trim().ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($answer)) {
+        return $true
+    }
+    if ($answer -eq "y" -or $answer -eq "yes") {
+        return $true
+    }
+    if ($answer -eq "n" -or $answer -eq "no") {
+        return $false
+    }
+    return $true
 }
 
 function Get-GithubRepo {
@@ -241,9 +256,14 @@ $currentBranch = (Invoke-Capture git @("branch", "--show-current") $projectRoot)
 if ([string]::IsNullOrWhiteSpace($currentBranch)) {
     throw "Could not detect current branch."
 }
+
+$branchFormat = Invoke-Capture git @("check-ref-format", "--branch", $currentBranch) $projectRoot -AllowFailure
+if ($branchFormat.ExitCode -ne 0) {
+    throw "Current branch '$currentBranch' is not a valid branch name."
+}
+
 if ($currentBranch -eq "main") {
-    Write-Host "You are on main, so the PR helper will exit now."
-    exit 0
+    throw "Current branch is main. Create or switch to a feature branch before creating a PR."
 }
 
 $remoteUrl = (Invoke-Capture git @("remote", "get-url", "origin") $projectRoot).Text
@@ -256,14 +276,21 @@ Write-Host "===================================================="
 
 Invoke-Checked gh @("auth", "status", "-h", "github.com") $projectRoot
 
-if (-not (Read-YesNo "Use '$currentBranch' as the PR source branch?" $true)) {
-    Write-Host "Aborted by user."
-    exit 0
+if ($Fast) {
+    Write-Host "Fast mode: using '$currentBranch' as the PR source branch."
+} else {
+    if (-not (Read-YesNo "Use '$currentBranch' as the PR source branch?" $true)) {
+        Write-Host "Aborted by user."
+        exit 0
+    }
 }
 
-$baseBranch = Read-WithDefault "Base branch" $Base
+$baseBranch = if ($Fast) { $Base } else { Read-WithDefault "Base branch" $Base }
 if ([string]::IsNullOrWhiteSpace($baseBranch)) {
     throw "Base branch cannot be empty."
+}
+if ($Fast) {
+    Write-Host "Fast mode: using '$baseBranch' as the PR base branch."
 }
 
 $baseRef = Resolve-BaseRef $projectRoot $baseBranch
@@ -308,12 +335,14 @@ if (-not [string]::IsNullOrWhiteSpace($diffStat)) {
 }
 Write-Host "===================================================="
 
-$title = Read-WithDefault "PR title" $title
+if (-not $Fast) {
+    $title = Read-WithDefault "PR title" $title
+}
 
 $tempDir = New-Item -ItemType Directory -Path ([System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "auto_commiter_pr_$([guid]::NewGuid())")) -Force
 $bodyFile = Join-Path $tempDir.FullName "pr_body.md"
 Set-Content -Path $bodyFile -Value $body -Encoding UTF8
-if (Read-YesNo "Edit PR body now?" $true) {
+if (-not $Fast -and (Read-YesNo "Edit PR body now?" $true)) {
     Edit-TextFile $bodyFile
     $body = (Get-Content -Path $bodyFile -Raw).TrimEnd()
     if ([string]::IsNullOrWhiteSpace($body)) {
@@ -357,7 +386,7 @@ if (-not $SkipPush) {
     }
 }
 
-if (-not (Read-YesNo "Create the PR now?" $true)) {
+if (-not (Read-CreateConfirmation)) {
     Write-Host "Aborted by user."
     exit 0
 }
