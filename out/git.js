@@ -37,6 +37,7 @@ exports.getWorkspaceRoot = getWorkspaceRoot;
 exports.getRepositoryRoot = getRepositoryRoot;
 exports.collectChanges = collectChanges;
 exports.commitFile = commitFile;
+exports.commitFiles = commitFiles;
 const vscode = __importStar(require("vscode"));
 const node_child_process_1 = require("node:child_process");
 const node_util_1 = require("node:util");
@@ -108,6 +109,13 @@ async function getFileDiffOrContent(repoRoot, filePath, maxDiffCharacters) {
 }
 async function commitFile(repoRoot, filePath, message) {
     await runGit(["add", "--", filePath], repoRoot);
+    await runGit(["commit", "-m", message], repoRoot);
+}
+async function commitFiles(repoRoot, filePaths, message) {
+    if (filePaths.length === 0) {
+        throw new Error("No files were selected for the batch commit.");
+    }
+    await runGit(["add", "--", ...filePaths], repoRoot);
     await runGit(["commit", "-m", message], repoRoot);
 }
 //# sourceMappingURL=git.js.map

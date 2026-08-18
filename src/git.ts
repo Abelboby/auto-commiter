@@ -87,3 +87,12 @@ export async function commitFile(repoRoot: string, filePath: string, message: st
   await runGit(["add", "--", filePath], repoRoot);
   await runGit(["commit", "-m", message], repoRoot);
 }
+
+export async function commitFiles(repoRoot: string, filePaths: string[], message: string): Promise<void> {
+  if (filePaths.length === 0) {
+    throw new Error("No files were selected for the batch commit.");
+  }
+
+  await runGit(["add", "--", ...filePaths], repoRoot);
+  await runGit(["commit", "-m", message], repoRoot);
+}

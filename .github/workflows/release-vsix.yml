@@ -1,0 +1,105 @@
+name: Release VSIX
+
+"on":
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump to apply before packaging.
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-vsix
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish GitHub Release
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore(release):')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync with latest main
+        run: |
+          git fetch origin main
+          git checkout -B main origin/main
+
+      - name: Select version bump
+        id: bump
+        shell: bash
+        run: |
+          BUMP="${{ github.event.inputs.bump }}"
+          if [ -z "$BUMP" ]; then
+            BUMP="patch"
+          fi
+          echo "value=$BUMP" >> "$GITHUB_OUTPUT"
+
+      - name: Bump package version
+        run: npm version "${{ steps.bump.outputs.value }}" --no-git-tag-version
+
+      - name: Read package version
+        id: version
+        shell: bash
+        run: echo "value=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Compile extension
+        run: npm run compile
+
+      - name: Package VSIX
+        run: npm run package:vsix
+
+      - name: Verify VSIX asset
+        id: vsix
+        shell: bash
+        run: |
+          VSIX="auto-commiter-${{ steps.version.outputs.value }}.vsix"
+          test -f "$VSIX"
+          echo "path=$VSIX" >> "$GITHUB_OUTPUT"
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore(release): v${{ steps.version.outputs.value }}"
+
+      - name: Push release commit and tag
+        run: |
+          git tag "v${{ steps.version.outputs.value }}"
+          git push origin HEAD:main
+          git push origin "v${{ steps.version.outputs.value }}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.version.outputs.value }}" "${{ steps.vsix.outputs.path }}" \
+            --title "v${{ steps.version.outputs.value }}" \
+            --generate-notes \
+            --latest

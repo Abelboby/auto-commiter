@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateCommitMessage = generateCommitMessage;
+exports.generateBatchCommitMessage = generateBatchCommitMessage;
 function normalizeWhitespace(input) {
     return input.replace(/\s+/g, " ").trim();
 }
@@ -14,8 +15,8 @@ function validateCommitMessage(message, validTags, maxWords) {
     }
     return normalized.split(" ").length <= maxWords;
 }
-function normalizeCommitMessage(message, filePath, validTags, maxWords) {
-    const fallback = `${validTags[1] ?? "Update:"} modify ${filePath}`;
+function normalizeCommitMessage(message, fallbackSubject, validTags, maxWords) {
+    const fallback = `${validTags[1] ?? "Update:"} modify ${fallbackSubject}`;
     if (!message) {
         return fallback;
     }
@@ -29,6 +30,31 @@ function normalizeCommitMessage(message, filePath, validTags, maxWords) {
     }
     return normalized;
 }
+function isGptOssModel(modelId) {
+    return modelId.startsWith("openai/gpt-oss-");
+}
+function buildGroqRequestBody(options) {
+    const body = {
+        model: options.modelId,
+        messages: [
+            {
+                role: "system",
+                content: "You write concise git commit messages. Return only the final commit message."
+            },
+            {
+                role: "user",
+                content: options.promptText
+            }
+        ],
+        temperature: options.temperature,
+        max_completion_tokens: 256
+    };
+    if (isGptOssModel(options.modelId)) {
+        body.reasoning_effort = "low";
+        body.reasoning_format = "hidden";
+    }
+    return body;
+}
 async function invokeGroqOnce(options) {
     try {
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -37,21 +63,7 @@ async function invokeGroqOnce(options) {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${options.apiKey}`
             },
-            body: JSON.stringify({
-                model: options.modelId,
-                messages: [
-                    {
-                        role: "system",
-                        content: "You write concise git commit messages."
-                    },
-                    {
-                        role: "user",
-                        content: options.promptText
-                    }
-                ],
-                temperature: options.temperature,
-                max_tokens: 64
-            })
+            body: JSON.stringify(buildGroqRequestBody(options))
         });
         if (!response.ok) {
             return {
@@ -136,6 +148,63 @@ async function generateCommitMessage(input) {
     auditTrail.push("All models failed validation. Using normalized fallback.");
     return {
         text: normalizeCommitMessage(lastCandidate, input.filePath, input.settings.validTags, input.settings.maxWords),
+        isFallback: true,
+        auditTrail
+    };
+}
+async function generateBatchCommitMessage(input) {
+    const models = toActiveModels(input.settings.models);
+    if (models.length === 0) {
+        throw new Error("No enabled Groq models are configured.");
+    }
+    const promptText = [
+        "Generate ONE git commit message for this full changeset.",
+        `Rules: max ${input.settings.maxWords} words, start with exactly one of: ${input.settings.validTags.join(", ")}`,
+        "Output only the commit message, nothing else.",
+        "",
+        "Files:",
+        ...input.changes.map((change) => `- ${change.filePath}`),
+        "",
+        "Changes:",
+        ...input.changes.flatMap((change) => [
+            `File: ${change.filePath}`,
+            "Diff or content:",
+            change.promptContent,
+            ""
+        ])
+    ].join("\n");
+    let lastCandidate;
+    const auditTrail = [];
+    for (const model of models) {
+        if (model.callsUsed >= model.maxCallsPerRun) {
+            continue;
+        }
+        model.callsUsed += 1;
+        auditTrail.push(`Trying ${model.id} (${model.callsUsed}/${model.maxCallsPerRun})`);
+        const result = await invokeGroqOnce({
+            apiKey: input.apiKey,
+            modelId: model.id,
+            promptText,
+            temperature: input.settings.temperature
+        });
+        if (result.ok && result.text) {
+            lastCandidate = result.text;
+            if (validateCommitMessage(result.text, input.settings.validTags, input.settings.maxWords)) {
+                auditTrail.push(`Accepted response from ${model.id}`);
+                return {
+                    text: normalizeCommitMessage(result.text, "selected files", input.settings.validTags, input.settings.maxWords),
+                    isFallback: false,
+                    auditTrail
+                };
+            }
+            auditTrail.push(`Rejected invalid response from ${model.id}: ${result.text}`);
+            continue;
+        }
+        auditTrail.push(`Model ${model.id} failed${result.code ? ` (${result.code})` : ""}: ${result.error ?? "Unknown error"}`);
+    }
+    auditTrail.push("All models failed validation. Using normalized fallback.");
+    return {
+        text: normalizeCommitMessage(lastCandidate, "selected files", input.settings.validTags, input.settings.maxWords),
         isFallback: true,
         auditTrail
     };

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { DEFAULT_COMMIT_TAGS, DEFAULT_MODELS } from "./defaults";
-import { ConfiguredModel, ExtensionSettingsSnapshot } from "./types";
+import { CommitMode, ConfiguredModel, ExtensionSettingsSnapshot } from "./types";
 
 const SECTION = "autoCommiter";
 
@@ -19,9 +19,14 @@ function normalizeModels(models: unknown): ConfiguredModel[] {
     .filter((model) => model.id.length > 0 && model.maxCallsPerRun > 0);
 }
 
+function normalizeCommitMode(value: unknown): CommitMode {
+  return value === "batch" ? "batch" : "single";
+}
+
 export function getSettings(): ExtensionSettingsSnapshot {
   const config = vscode.workspace.getConfiguration(SECTION);
   return {
+    commitMode: normalizeCommitMode(config.get<CommitMode>("commitMode", "single")),
     allowFallbackCommits: config.get<boolean>("allowFallbackCommits", true),
     maxDiffCharacters: config.get<number>("maxDiffCharacters", 4000),
     maxCommitWords: config.get<number>("maxCommitWords", 10),
@@ -29,6 +34,12 @@ export function getSettings(): ExtensionSettingsSnapshot {
     commitTagOptions: config.get<string[]>("commitTagOptions", DEFAULT_COMMIT_TAGS),
     models: normalizeModels(config.get<ConfiguredModel[]>("models", DEFAULT_MODELS))
   };
+}
+
+export async function saveCommitMode(mode: CommitMode): Promise<void> {
+  await vscode.workspace
+    .getConfiguration(SECTION)
+    .update("commitMode", normalizeCommitMode(mode), vscode.ConfigurationTarget.Global);
 }
 
 export async function saveModels(models: ConfiguredModel[]): Promise<void> {

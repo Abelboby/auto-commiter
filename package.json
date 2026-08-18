@@ -2,7 +2,7 @@
   "name": "auto-commiter",
   "displayName": "Auto Commiter",
   "description": "Generate per-file git commit messages with Groq and commit them from VS Code.",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "publisher": "abelboby",
   "icon": "media/activity-bar.png",
   "license": "MIT",
@@ -22,10 +22,13 @@
     "SCM"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:autoCommiter.runAutoCommit",
     "onCommand:autoCommiter.manageSettings",
     "onCommand:autoCommiter.setGroqApiKey",
     "onCommand:autoCommiter.openOutput",
+    "onCommand:autoCommiter.checkForUpdates",
+    "onCommand:autoCommiter.installUpdate",
     "onView:autoCommiter.sidebar"
   ],
   "main": "./out/extension.js",
@@ -67,6 +70,16 @@
         "command": "autoCommiter.openOutput",
         "title": "Auto Commiter: Open Output",
         "icon": "$(list-unordered)"
+      },
+      {
+        "command": "autoCommiter.checkForUpdates",
+        "title": "Auto Commiter: Check for Updates",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "autoCommiter.installUpdate",
+        "title": "Auto Commiter: Install Update",
+        "icon": "$(cloud-download)"
       }
     ],
     "menus": {
@@ -91,50 +104,59 @@
     "configuration": {
       "title": "Auto Commiter",
       "properties": {
+        "autoCommiter.commitMode": {
+          "type": "string",
+          "enum": [
+            "single",
+            "batch"
+          ],
+          "default": "single",
+          "description": "Commit mode used by the sidebar. Single generates one commit per file; batch will generate one commit for the selected files."
+        },
         "autoCommiter.models": {
           "type": "array",
           "default": [
             {
-              "id": "llama-3.1-8b-instant",
-              "enabled": true,
-              "maxCallsPerRun": 20,
-              "costOrder": 1,
-              "costTier": "lowest"
-            },
-            {
               "id": "openai/gpt-oss-20b",
               "enabled": true,
-              "maxCallsPerRun": 18,
-              "costOrder": 2,
-              "costTier": "low"
+              "maxCallsPerRun": 12,
+              "costOrder": 1,
+              "costTier": "primary"
             },
             {
-              "id": "meta-llama/llama-4-scout-17b-16e-instruct",
+              "id": "qwen/qwen3.6-27b",
               "enabled": true,
-              "maxCallsPerRun": 15,
-              "costOrder": 3,
-              "costTier": "medium-low"
+              "maxCallsPerRun": 6,
+              "costOrder": 2,
+              "costTier": "backup"
             },
             {
               "id": "openai/gpt-oss-120b",
               "enabled": true,
               "maxCallsPerRun": 12,
-              "costOrder": 4,
-              "costTier": "medium"
+              "costOrder": 3,
+              "costTier": "quality-fallback"
             },
             {
-              "id": "qwen/qwen3-32b",
+              "id": "groq/compound-mini",
               "enabled": true,
-              "maxCallsPerRun": 35,
-              "costOrder": 5,
-              "costTier": "medium-high"
+              "maxCallsPerRun": 10,
+              "costOrder": 4,
+              "costTier": "fast-fallback"
             },
             {
-              "id": "llama-3.3-70b-versatile",
+              "id": "groq/compound",
+              "enabled": true,
+              "maxCallsPerRun": 4,
+              "costOrder": 5,
+              "costTier": "final-fallback"
+            },
+            {
+              "id": "allam-2-7b",
               "enabled": true,
               "maxCallsPerRun": 10,
               "costOrder": 6,
-              "costTier": "highest"
+              "costTier": "language-fallback"
             }
           ],
           "description": "Groq models to try in order. Users can disable models, change limits, or add new models.",
