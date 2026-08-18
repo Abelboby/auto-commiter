@@ -14,6 +14,15 @@ interface GroqResult {
   error?: string;
 }
 
+interface GroqRequestBody {
+  model: string;
+  messages: Array<{ role: "system" | "user"; content: string }>;
+  temperature: number;
+  max_completion_tokens: number;
+  reasoning_effort?: "low";
+  reasoning_format?: "hidden";
+}
+
 export interface GenerationSettings {
   models: ConfiguredModel[];
   validTags: string[];
@@ -63,6 +72,35 @@ function normalizeCommitMessage(message: string | undefined, filePath: string, v
   return normalized;
 }
 
+function isGptOssModel(modelId: string): boolean {
+  return modelId.startsWith("openai/gpt-oss-");
+}
+
+function buildGroqRequestBody(options: GroqCallOptions): GroqRequestBody {
+  const body: GroqRequestBody = {
+    model: options.modelId,
+    messages: [
+      {
+        role: "system",
+        content: "You write concise git commit messages. Return only the final commit message."
+      },
+      {
+        role: "user",
+        content: options.promptText
+      }
+    ],
+    temperature: options.temperature,
+    max_completion_tokens: 256
+  };
+
+  if (isGptOssModel(options.modelId)) {
+    body.reasoning_effort = "low";
+    body.reasoning_format = "hidden";
+  }
+
+  return body;
+}
+
 async function invokeGroqOnce(options: GroqCallOptions): Promise<GroqResult> {
   try {
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -71,21 +109,7 @@ async function invokeGroqOnce(options: GroqCallOptions): Promise<GroqResult> {
         "Content-Type": "application/json",
         Authorization: `Bearer ${options.apiKey}`
       },
-      body: JSON.stringify({
-        model: options.modelId,
-        messages: [
-          {
-            role: "system",
-            content: "You write concise git commit messages."
-          },
-          {
-            role: "user",
-            content: options.promptText
-          }
-        ],
-        temperature: options.temperature,
-        max_tokens: 64
-      })
+      body: JSON.stringify(buildGroqRequestBody(options))
     });
 
     if (!response.ok) {
