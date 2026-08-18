@@ -29,6 +29,31 @@ function normalizeCommitMessage(message, filePath, validTags, maxWords) {
     }
     return normalized;
 }
+function isGptOssModel(modelId) {
+    return modelId.startsWith("openai/gpt-oss-");
+}
+function buildGroqRequestBody(options) {
+    const body = {
+        model: options.modelId,
+        messages: [
+            {
+                role: "system",
+                content: "You write concise git commit messages. Return only the final commit message."
+            },
+            {
+                role: "user",
+                content: options.promptText
+            }
+        ],
+        temperature: options.temperature,
+        max_completion_tokens: 256
+    };
+    if (isGptOssModel(options.modelId)) {
+        body.reasoning_effort = "low";
+        body.reasoning_format = "hidden";
+    }
+    return body;
+}
 async function invokeGroqOnce(options) {
     try {
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -37,21 +62,7 @@ async function invokeGroqOnce(options) {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${options.apiKey}`
             },
-            body: JSON.stringify({
-                model: options.modelId,
-                messages: [
-                    {
-                        role: "system",
-                        content: "You write concise git commit messages."
-                    },
-                    {
-                        role: "user",
-                        content: options.promptText
-                    }
-                ],
-                temperature: options.temperature,
-                max_tokens: 64
-            })
+            body: JSON.stringify(buildGroqRequestBody(options))
         });
         if (!response.ok) {
             return {
