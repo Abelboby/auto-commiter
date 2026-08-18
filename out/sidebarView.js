@@ -190,7 +190,6 @@ class AutoCommiterSidebarProvider {
     :root {
       --ac-bg: var(--vscode-sideBar-background);
       --ac-top: var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background));
-      --ac-nav: var(--vscode-sideBar-background);
       --ac-panel: var(--vscode-sideBar-background);
       --ac-card: var(--vscode-list-inactiveSelectionBackground, var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background)));
       --ac-card-hover: var(--vscode-list-hoverBackground, var(--vscode-list-inactiveSelectionBackground));
@@ -284,59 +283,18 @@ class AutoCommiterSidebarProvider {
       background: var(--vscode-toolbar-hoverBackground, var(--ac-card-hover));
       color: var(--ac-text);
     }
-    .tabs {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      height: 32px;
-      flex: 0 0 auto;
-      border-bottom: 1px solid var(--ac-border);
-      background: var(--ac-nav);
-    }
-    .tab {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--ac-dim);
-      font-size: 12px;
-      cursor: default;
-      transition: background 120ms ease, color 120ms ease;
-    }
-    .tabActive {
-      position: relative;
-      background: color-mix(in srgb, #2a2d2e 88%, var(--ac-primary) 12%);
-      color: var(--vscode-tab-activeForeground, var(--ac-text));
-    }
-    .tabActive::after {
-      content: "";
-      position: absolute;
-      left: 28%;
-      right: 28%;
-      bottom: 0;
-      height: 2px;
-      border-radius: 999px 999px 0 0;
-      background: var(--ac-primary);
-    }
     .content {
       flex: 1 1 auto;
       min-height: 0;
       overflow-y: auto;
-      padding: 12px;
+      padding: 8px;
       display: grid;
       align-content: start;
-      gap: 12px;
-    }
-    .statusPill {
-      display: flex;
-      align-items: center;
       gap: 8px;
-      padding: 8px;
-      border: 1px solid var(--ac-border);
-      border-radius: var(--ac-radius-md);
-      background: var(--ac-panel);
     }
     .keyDot {
-      width: 8px;
-      height: 8px;
+      width: 7px;
+      height: 7px;
       border-radius: 999px;
       background: ${this.state.apiKeyConfigured ? "var(--ac-good)" : "var(--ac-error)"};
       box-shadow: 0 0 4px ${this.state.apiKeyConfigured ? "rgba(16,185,129,0.5)" : "rgba(255,180,171,0.45)"};
@@ -349,18 +307,18 @@ class AutoCommiterSidebarProvider {
       letter-spacing: 0.05em;
       text-transform: uppercase;
     }
-    .statusCard {
+    .statusPanel {
       display: grid;
-      gap: 8px;
+      gap: 6px;
       padding: 8px;
       border: 1px solid var(--ac-border);
-      border-radius: var(--ac-radius-md);
+      border-radius: var(--ac-radius-sm);
       background: var(--ac-panel);
     }
     .statusLine {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       min-width: 0;
     }
     .statusDot {
@@ -380,14 +338,22 @@ class AutoCommiterSidebarProvider {
       background: var(--ac-error);
     }
     .statusTitle {
+      flex: 1 1 auto;
       min-width: 0;
       color: var(--ac-text);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
-      line-height: 18px;
+      line-height: 16px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .keyState {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--ac-muted);
     }
     .statusMessage {
       margin: 0;
@@ -425,12 +391,15 @@ class AutoCommiterSidebarProvider {
       background: var(--vscode-toolbar-hoverBackground, var(--ac-card-hover));
       color: var(--ac-text);
     }
+    .queueSection {
+      min-width: 0;
+    }
     .sectionHeader {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      padding: 0 4px 6px;
+      padding: 2px 0 4px;
     }
     .sectionTitle {
       min-width: 0;
@@ -445,14 +414,6 @@ class AutoCommiterSidebarProvider {
       accent-color: var(--ac-primary);
       cursor: pointer;
     }
-    .sectionActionIcon {
-      color: var(--ac-dim);
-      width: 18px;
-      height: 18px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
     .reviewList {
       display: grid;
       gap: 8px;
@@ -460,7 +421,7 @@ class AutoCommiterSidebarProvider {
     .commitCard {
       display: grid;
       gap: 8px;
-      padding: 10px;
+      padding: 8px;
       border: 1px solid var(--ac-border);
       border-left: 2px solid var(--ac-primary-soft);
       border-radius: var(--ac-radius-sm);
@@ -489,7 +450,6 @@ class AutoCommiterSidebarProvider {
     .fileMeta {
       display: flex;
       align-items: center;
-      gap: 7px;
       min-width: 0;
     }
     .filePath {
@@ -524,10 +484,23 @@ class AutoCommiterSidebarProvider {
       font-weight: 700;
       opacity: 0.85;
     }
+    .badgeRow {
+      min-height: 13px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow: hidden;
+    }
+    .cardActions {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+    }
     .cardIcon {
       flex: 0 0 auto;
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -553,14 +526,14 @@ class AutoCommiterSidebarProvider {
     }
     .messageInput {
       width: 100%;
-      height: 48px;
+      height: 38px;
       resize: none;
       border: 1px solid var(--ac-border-strong);
-      border-radius: var(--ac-radius-sm);
+      border-radius: var(--ac-radius-xs);
       outline: none;
       background: var(--ac-input);
       color: var(--vscode-input-foreground);
-      padding: 4px 22px 4px 6px;
+      padding: 3px 20px 3px 6px;
       font-family: "SF Mono", Consolas, monospace;
       font-size: 12px;
       line-height: 16px;
@@ -584,13 +557,10 @@ class AutoCommiterSidebarProvider {
     }
     .emptyState {
       margin: 0;
-      padding: 12px 8px;
-      border: 1px dashed var(--ac-border-strong);
-      border-radius: var(--ac-radius-md);
+      padding: 2px 0;
       color: var(--ac-dim);
       font-size: 12px;
       line-height: 16px;
-      background: rgba(37, 37, 38, 0.55);
     }
     .footer {
       flex: 0 0 auto;
@@ -612,19 +582,15 @@ class AutoCommiterSidebarProvider {
 </head>
 <body>
   <div class="shell">
-    <nav class="tabs" aria-label="Auto Commiter sections">
-      <div class="tab tabActive">Review</div>
-      <div class="tab" title="History is not stored yet">History</div>
-    </nav>
     <main class="content">
-      <section class="statusPill">
-        <span class="keyDot"></span>
-        <span class="caps">${this.state.apiKeyConfigured ? "Groq API Key Configured" : "Groq API Key Missing"}</span>
-      </section>
-      <section class="statusCard">
+      <section class="statusPanel">
         <div class="statusLine">
           <span class="statusDot" data-tone="${statusTone}"></span>
           <span class="statusTitle">${escapeHtml(statusLabel)}</span>
+          <span class="keyState" title="${this.state.apiKeyConfigured ? "Groq API key configured" : "Groq API key missing"}">
+            <span class="keyDot"></span>
+            <span class="caps">${this.state.apiKeyConfigured ? "Key Set" : "No Key"}</span>
+          </span>
         </div>
         <p class="statusMessage">${escapeHtml(this.state.statusMessage)}</p>
         <button class="mainButton" data-action="run" ${this.state.stage === "generating" || this.state.stage === "committing" ? "disabled" : ""}>
@@ -632,29 +598,30 @@ class AutoCommiterSidebarProvider {
           <span>${this.state.stage === "generating" ? "Generating Commit Messages" : "Generate Commit Messages"}</span>
         </button>
       </section>
-      <section>
+      <section class="queueSection">
         <div class="sectionHeader">
           <div class="sectionTitle">
-            <input id="selectAll" class="selectAll" type="checkbox" ${selectedCount > 0 && selectedCount === totalCount ? "checked" : ""} ${totalCount === 0 ? "disabled" : ""} title="Select all" />
-            <span class="caps">Review Queue (${totalCount} file${totalCount === 1 ? "" : "s"})</span>
+            ${totalCount === 0 ? "" : `<input id="selectAll" class="selectAll" type="checkbox" ${selectedCount > 0 && selectedCount === totalCount ? "checked" : ""} title="Select all" />`}
+            <span class="caps" id="queueCount">Review Queue (${totalCount} file${totalCount === 1 ? "" : "s"})</span>
           </div>
-          <span class="sectionActionIcon" aria-hidden="true">${iconSvg("chevronDown", "svgIcon svgIconSmall")}</span>
         </div>
         ${totalCount === 0
-            ? `<p class="emptyState">Generate commit messages and the review queue will appear here. You can edit messages, deselect files, and commit without leaving the sidebar.</p>`
+            ? `<p class="emptyState">No files in review yet. Generate messages to start.</p>`
             : `<div class="reviewList" id="reviewList"></div>`}
       </section>
     </main>
-    <footer class="footer">
-      <button class="mainButton" id="commitSelected" ${canCommit ? "" : "disabled"}>
-        <span>${iconSvg("check")}</span>
-        <span>Commit Selected (${selectedCount}/${totalCount})</span>
-      </button>
-      <button class="ghostButton" data-action="clear-review" ${totalCount === 0 ? "disabled" : ""}>
-        <span>${iconSvg("trash")}</span>
-        <span>Clear Review</span>
-      </button>
-    </footer>
+    ${totalCount === 0
+            ? ""
+            : `<footer class="footer" id="footer">
+          <button class="mainButton" id="commitSelected" ${canCommit ? "" : "disabled"}>
+            <span>${iconSvg("check")}</span>
+            <span>Commit Selected (${selectedCount}/${totalCount})</span>
+          </button>
+          <button class="ghostButton" data-action="clear-review">
+            <span>${iconSvg("trash")}</span>
+            <span>Clear Review</span>
+          </button>
+        </footer>`}
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
@@ -676,6 +643,11 @@ class AutoCommiterSidebarProvider {
       }
 
       reviewList.innerHTML = "";
+      if (commits.length === 0) {
+        reviewList.innerHTML = '<p class="emptyState">No files in review. Generate messages to start.</p>';
+        return;
+      }
+
       commits.forEach((entry, index) => {
         const rawTag = (entry.message || "").split(":")[0] || "Update";
         const tag = rawTag.slice(0, 12);
@@ -689,17 +661,21 @@ class AutoCommiterSidebarProvider {
             <div class="fileBody">
               <div class="fileMeta">
                 <span class="filePath" title="\${escapeHtml(entry.filePath)}">\${escapeHtml(entry.filePath)}</span>
+              </div>
+              <div class="badgeRow">
                 <span class="tag">\${escapeHtml(tag)}</span>
                 \${entry.isFallback ? '<span class="tag fallbackTag">Fallback</span>' : ""}
                 <span class="changeMark">\${changeMark}</span>
-                <button class="cardIcon" data-action="run" title="Regenerate all messages" aria-label="Regenerate all messages">${iconSvg("refresh", "svgIcon svgIconSmall")}</button>
               </div>
               <div class="messageWrap">
                 <textarea class="messageInput" data-kind="message" data-index="\${index}">\${escapeHtml(entry.message)}</textarea>
                 <span class="editMark">${iconSvg("edit", "svgIcon svgIconSmall")}</span>
               </div>
             </div>
-            <button class="cardIcon removeButton" data-kind="remove" data-index="\${index}" title="Remove from review" aria-label="Remove from review">${iconSvg("x", "svgIcon svgIconSmall")}</button>
+            <div class="cardActions">
+              <button class="cardIcon" data-action="run" title="Regenerate all messages" aria-label="Regenerate all messages">${iconSvg("refresh", "svgIcon svgIconSmall")}</button>
+              <button class="cardIcon removeButton" data-kind="remove" data-index="\${index}" title="Remove from review" aria-label="Remove from review">${iconSvg("x", "svgIcon svgIconSmall")}</button>
+            </div>
           </div>
         \`;
         reviewList.appendChild(card);
@@ -748,10 +724,18 @@ class AutoCommiterSidebarProvider {
       const total = commits.length;
       const selectAll = document.getElementById("selectAll");
       const commitButton = document.getElementById("commitSelected");
+      const footer = document.getElementById("footer");
+      const queueCount = document.getElementById("queueCount");
       if (selectAll) {
         selectAll.checked = total > 0 && selected === total;
         selectAll.indeterminate = selected > 0 && selected < total;
         selectAll.disabled = total === 0;
+      }
+      if (queueCount) {
+        queueCount.textContent = \`Review Queue (\${total} file\${total === 1 ? "" : "s"})\`;
+      }
+      if (footer) {
+        footer.hidden = total === 0;
       }
       if (commitButton) {
         commitButton.disabled = selected === 0;
@@ -830,8 +814,7 @@ function iconSvg(name, className = "svgIcon") {
         trash: '<path d="M4 6h12"></path><path d="M8 6V4h4v2"></path><path d="M6 6l1 11h6l1-11"></path><path d="M9 9v5"></path><path d="M11 9v5"></path>',
         refresh: '<path d="M16 7a6 6 0 1 0 1.4 6"></path><path d="M16 3v4h-4"></path>',
         edit: '<path d="M4 14.5V17h2.5L15 8.5 12.5 6 4 14.5z"></path><path d="M11.5 7l2.5 2.5"></path>',
-        x: '<path d="M5 5l10 10"></path><path d="M15 5L5 15"></path>',
-        chevronDown: '<path d="M5 7.5l5 5 5-5"></path>'
+        x: '<path d="M5 5l10 10"></path><path d="M15 5L5 15"></path>'
     };
     return `<svg class="${className}" viewBox="0 0 20 20" aria-hidden="true">${icons[name] ?? icons.list}</svg>`;
 }
