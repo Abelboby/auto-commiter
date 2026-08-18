@@ -50,7 +50,11 @@ class AutoCommiterSidebarProvider {
         commitMode: (0, config_1.getSettings)().commitMode,
         apiKeyConfigured: false,
         pendingCommits: [],
-        batchReview: undefined
+        batchReview: undefined,
+        update: {
+            status: "checking",
+            message: "Checking for extension updates."
+        }
     };
     onCommitRequested;
     onBatchCommitRequested;
@@ -101,6 +105,18 @@ class AutoCommiterSidebarProvider {
             if (typedMessage.type === "output") {
                 this.outputChannel.show(true);
             }
+            if (typedMessage.type === "check-update") {
+                await vscode.commands.executeCommand("autoCommiter.checkForUpdates");
+            }
+            if (typedMessage.type === "install-update") {
+                await vscode.commands.executeCommand("autoCommiter.installUpdate");
+            }
+            if (typedMessage.type === "open-release") {
+                const releaseUrl = this.state.update.releaseUrl;
+                if (releaseUrl) {
+                    await vscode.env.openExternal(vscode.Uri.parse(releaseUrl));
+                }
+            }
             if (typedMessage.type === "clear-review") {
                 this.clearPendingCommits();
             }
@@ -124,6 +140,38 @@ class AutoCommiterSidebarProvider {
     async refreshApiKeyState() {
         this.state.apiKeyConfigured = Boolean((await this.context.secrets.get(config_1.SECRET_KEY))?.trim());
         this.state.commitMode = (0, config_1.getSettings)().commitMode;
+    }
+    setUpdateChecking() {
+        this.state.update = {
+            ...this.state.update,
+            status: "checking",
+            message: "Checking for extension updates."
+        };
+        this.render();
+    }
+    setUpdateState(update) {
+        this.state.update = {
+            status: update.status,
+            message: update.message,
+            currentVersion: update.currentVersion,
+            latestVersion: update.latestVersion,
+            releaseUrl: update.releaseUrl,
+            assetName: update.assetName
+        };
+        this.render();
+    }
+    setUpdateInstalling(update) {
+        this.state.update = {
+            status: "installing",
+            message: update.latestVersion
+                ? `Installing v${update.latestVersion}.`
+                : "Installing update.",
+            currentVersion: update.currentVersion,
+            latestVersion: update.latestVersion,
+            releaseUrl: update.releaseUrl,
+            assetName: update.assetName
+        };
+        this.render();
     }
     setGeneratingState(message) {
         this.state.stage = "generating";
@@ -245,6 +293,24 @@ class AutoCommiterSidebarProvider {
                 : this.state.stage === "generating" || this.state.stage === "committing"
                     ? "busy"
                     : "ready";
+        const updateTone = this.state.update.status === "available"
+            ? "available"
+            : this.state.update.status === "error"
+                ? "error"
+                : this.state.update.status === "installing" || this.state.update.status === "checking"
+                    ? "busy"
+                    : "current";
+        const updateTitle = this.state.update.status === "available"
+            ? `Update v${this.state.update.latestVersion ?? ""}`.trim()
+            : this.state.update.status === "current"
+                ? "Extension Up To Date"
+                : this.state.update.status === "installing"
+                    ? "Installing Update"
+                    : this.state.update.status === "error"
+                        ? "Update Check Failed"
+                        : "Checking Updates";
+        const canInstallUpdate = this.state.update.status === "available";
+        const canOpenRelease = Boolean(this.state.update.releaseUrl);
         const statusLabel = (() => {
             if (this.state.stage === "review") {
                 return "Ready";
@@ -443,6 +509,66 @@ class AutoCommiterSidebarProvider {
       color: var(--ac-dim);
       font-size: 12px;
       line-height: 16px;
+    }
+    .updatePanel {
+      display: grid;
+      gap: 6px;
+      padding: 7px;
+      border: 1px solid var(--ac-border);
+      border-radius: var(--ac-radius-sm);
+      background: var(--ac-input);
+    }
+    .updateTop {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .updateDot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--ac-good);
+      flex: 0 0 auto;
+    }
+    .updateDot[data-tone="available"] {
+      background: var(--ac-warn);
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.16);
+    }
+    .updateDot[data-tone="busy"] {
+      background: var(--ac-primary);
+      box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.16);
+    }
+    .updateDot[data-tone="error"] {
+      background: var(--ac-error);
+    }
+    .updateTitle {
+      flex: 1 1 auto;
+      min-width: 0;
+      color: var(--ac-text);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 15px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .updateMessage {
+      margin: 0;
+      color: var(--ac-dim);
+      font-size: 11px;
+      line-height: 15px;
+    }
+    .updateActions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+    }
+    .updateActions .ghostButton,
+    .updateActions .mainButton {
+      height: 24px;
+      font-size: 11px;
+      line-height: 15px;
     }
     .modeSwitch {
       display: grid;
@@ -785,6 +911,28 @@ class AutoCommiterSidebarProvider {
           <button class="modeButton" data-mode="batch" data-active="${this.state.commitMode === "batch"}" type="button">Batch</button>
         </div>
         <p class="statusMessage">${escapeHtml(displayStatusMessage)}</p>
+        <section class="updatePanel" aria-label="Extension update status">
+          <div class="updateTop">
+            <span class="updateDot" data-tone="${updateTone}"></span>
+            <span class="updateTitle">${escapeHtml(updateTitle)}</span>
+          </div>
+          <p class="updateMessage">${escapeHtml(this.state.update.message)}</p>
+          <div class="updateActions">
+            ${canInstallUpdate
+            ? `<button class="mainButton" data-action="install-update" type="button">
+                  <span>${iconSvg("download")}</span>
+                  <span>Install</span>
+                </button>`
+            : `<button class="ghostButton" data-action="check-update" type="button" ${this.state.update.status === "checking" || this.state.update.status === "installing" ? "disabled" : ""}>
+                  <span>${iconSvg("refresh")}</span>
+                  <span>Check</span>
+                </button>`}
+            <button class="ghostButton" data-action="open-release" type="button" ${canOpenRelease ? "" : "disabled"}>
+              <span>${iconSvg("external")}</span>
+              <span>Release</span>
+            </button>
+          </div>
+        </section>
         <button class="mainButton" data-action="run" ${this.state.stage === "generating" || this.state.stage === "committing" ? "disabled" : ""}>
           <span>${this.state.stage === "generating" ? iconSvg("loader") : iconSvg("sparkle")}</span>
           <span>${generateButtonText}</span>
@@ -1121,6 +1269,8 @@ function iconSvg(name, className = "svgIcon") {
         check: '<path d="M4 10.5l4 4L16 6"></path>',
         trash: '<path d="M4 6h12"></path><path d="M8 6V4h4v2"></path><path d="M6 6l1 11h6l1-11"></path><path d="M9 9v5"></path><path d="M11 9v5"></path>',
         refresh: '<path d="M16 7a6 6 0 1 0 1.4 6"></path><path d="M16 3v4h-4"></path>',
+        download: '<path d="M10 3v9"></path><path d="M6 9l4 4 4-4"></path><path d="M4 16h12"></path>',
+        external: '<path d="M8 5H5v10h10v-3"></path><path d="M11 5h4v4"></path><path d="M10 10l5-5"></path>',
         edit: '<path d="M4 14.5V17h2.5L15 8.5 12.5 6 4 14.5z"></path><path d="M11.5 7l2.5 2.5"></path>',
         x: '<path d="M5 5l10 10"></path><path d="M15 5L5 15"></path>'
     };
