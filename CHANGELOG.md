@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.1.10
+
+- Generate release notes and update changelog
+
 ## 0.1.3
 
 - Updated default model routing to match the six-model Groq setup with adjusted per-run call limits
