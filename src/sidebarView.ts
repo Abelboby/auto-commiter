@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { SECRET_KEY } from "./config";
-import { CandidateCommit } from "./types";
+import { getSettings, saveCommitMode, SECRET_KEY } from "./config";
+import { BatchCommit, CandidateCommit, CommitMode } from "./types";
 
 function getNonce(): string {
   return Math.random().toString(36).slice(2);
@@ -12,11 +12,24 @@ interface SidebarDraftCommit extends CandidateCommit {
   included: boolean;
 }
 
+interface SidebarBatchFile {
+  filePath: string;
+  included: boolean;
+}
+
+interface SidebarBatchReview {
+  message: string;
+  isFallback: boolean;
+  files: SidebarBatchFile[];
+}
+
 interface SidebarState {
   stage: SidebarStage;
   statusMessage: string;
+  commitMode: CommitMode;
   apiKeyConfigured: boolean;
   pendingCommits: SidebarDraftCommit[];
+  batchReview: SidebarBatchReview | undefined;
 }
 
 export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
@@ -25,10 +38,13 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
   private readonly state: SidebarState = {
     stage: "idle",
     statusMessage: "Ready to scan your repo and prepare commit messages.",
+    commitMode: getSettings().commitMode,
     apiKeyConfigured: false,
-    pendingCommits: []
+    pendingCommits: [],
+    batchReview: undefined
   };
   public onCommitRequested: ((commits: CandidateCommit[]) => Promise<void>) | undefined;
+  public onBatchCommitRequested: ((commit: BatchCommit) => Promise<void>) | undefined;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -50,9 +66,23 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      const typedMessage = message as { type?: string };
+      const typedMessage = message as { type?: string; mode?: CommitMode };
       if (typedMessage.type === "run") {
         await vscode.commands.executeCommand("autoCommiter.runAutoCommit");
+      }
+      if (typedMessage.type === "set-mode" && isCommitMode(typedMessage.mode)) {
+        this.state.commitMode = typedMessage.mode;
+        if (this.state.stage !== "generating" && this.state.stage !== "committing") {
+          const hasDraft = typedMessage.mode === "batch"
+            ? Boolean(this.state.batchReview)
+            : this.state.pendingCommits.length > 0;
+          this.state.stage = hasDraft ? "review" : "idle";
+          this.state.statusMessage = hasDraft
+            ? "Review restored."
+            : "Ready to scan your repo and prepare commit messages.";
+        }
+        await saveCommitMode(typedMessage.mode);
+        this.render();
       }
       if (typedMessage.type === "settings") {
         await vscode.commands.executeCommand("autoCommiter.manageSettings");
@@ -76,6 +106,12 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
           await this.onCommitRequested(payload.commits);
         }
       }
+      if (typedMessage.type === "commit-batch") {
+        const payload = message as { commit?: BatchCommit };
+        if (isBatchCommit(payload.commit) && this.onBatchCommitRequested) {
+          await this.onBatchCommitRequested(payload.commit);
+        }
+      }
     });
 
     webviewView.onDidDispose(() => {
@@ -85,12 +121,17 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
 
   async refreshApiKeyState(): Promise<void> {
     this.state.apiKeyConfigured = Boolean((await this.context.secrets.get(SECRET_KEY))?.trim());
+    this.state.commitMode = getSettings().commitMode;
   }
 
   setGeneratingState(message: string): void {
     this.state.stage = "generating";
     this.state.statusMessage = message;
-    this.state.pendingCommits = [];
+    if (this.state.commitMode === "batch") {
+      this.state.batchReview = undefined;
+    } else {
+      this.state.pendingCommits = [];
+    }
     this.render();
   }
 
@@ -104,6 +145,20 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
     this.render();
   }
 
+  setBatchReviewState(commit: BatchCommit, message: string): void {
+    this.state.stage = "review";
+    this.state.statusMessage = message;
+    this.state.batchReview = {
+      message: commit.message,
+      isFallback: commit.isFallback,
+      files: commit.filePaths.map((filePath) => ({
+        filePath,
+        included: true
+      }))
+    };
+    this.render();
+  }
+
   setCommittingState(message: string): void {
     this.state.stage = "committing";
     this.state.statusMessage = message;
@@ -113,14 +168,22 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
   setIdleState(message: string): void {
     this.state.stage = "idle";
     this.state.statusMessage = message;
-    this.state.pendingCommits = [];
+    if (this.state.commitMode === "batch") {
+      this.state.batchReview = undefined;
+    } else {
+      this.state.pendingCommits = [];
+    }
     this.render();
   }
 
   setDoneState(message: string): void {
     this.state.stage = "done";
     this.state.statusMessage = message;
-    this.state.pendingCommits = [];
+    if (this.state.commitMode === "batch") {
+      this.state.batchReview = undefined;
+    } else {
+      this.state.pendingCommits = [];
+    }
     this.render();
   }
 
@@ -133,7 +196,11 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
   clearPendingCommits(): void {
     this.state.stage = "idle";
     this.state.statusMessage = "Review cleared. Ready for another run.";
-    this.state.pendingCommits = [];
+    if (this.state.commitMode === "batch") {
+      this.state.batchReview = undefined;
+    } else {
+      this.state.pendingCommits = [];
+    }
     this.render();
   }
 
@@ -146,9 +213,35 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
 
   private getHtml(): string {
     const nonce = getNonce();
-    const canCommit = this.state.pendingCommits.some((commit) => commit.included);
-    const selectedCount = this.state.pendingCommits.filter((commit) => commit.included).length;
-    const totalCount = this.state.pendingCommits.length;
+    const isBatchMode = this.state.commitMode === "batch";
+    const batchSelectedCount = this.state.batchReview?.files.filter((file) => file.included).length ?? 0;
+    const batchTotalCount = this.state.batchReview?.files.length ?? 0;
+    const singleSelectedCount = this.state.pendingCommits.filter((commit) => commit.included).length;
+    const singleTotalCount = this.state.pendingCommits.length;
+    const selectedCount = isBatchMode ? batchSelectedCount : singleSelectedCount;
+    const totalCount = isBatchMode ? batchTotalCount : singleTotalCount;
+    const canCommit = isBatchMode
+      ? batchSelectedCount > 0 && Boolean(this.state.batchReview?.message.trim())
+      : this.state.pendingCommits.some((commit) => commit.included);
+    const modeDescription = isBatchMode
+      ? "Generate one message for all selected files."
+      : "Review, edit, and commit selected files.";
+    const displayStatusMessage = this.state.stage === "idle" || this.state.stage === "review"
+      ? modeDescription
+      : this.state.statusMessage;
+    const generateButtonText = this.state.stage === "generating"
+      ? isBatchMode
+        ? "Generating Batch Commit"
+        : "Generating Commit Messages"
+      : isBatchMode
+        ? "Generate Batch Commit"
+        : "Generate Commit Messages";
+    const commitButtonText = isBatchMode
+      ? `Commit Batch (${selectedCount}/${totalCount})`
+      : `Commit Selected (${selectedCount}/${totalCount})`;
+    const queueTitle = isBatchMode
+      ? `Batch Review (${totalCount} file${totalCount === 1 ? "" : "s"})`
+      : `Review Queue (${totalCount} file${totalCount === 1 ? "" : "s"})`;
     const statusTone = this.state.stage === "error"
       ? "error"
       : this.state.stage === "done"
@@ -158,7 +251,7 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
           : "ready";
     const statusLabel = (() => {
       if (this.state.stage === "review") {
-        return `Ready - ${totalCount} file${totalCount === 1 ? "" : "s"} changed`;
+        return "Ready";
       }
       if (this.state.stage === "generating") {
         return "Generating commit messages";
@@ -280,10 +373,10 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
     .content {
       flex: 1 1 auto;
       min-height: 0;
-      overflow-y: auto;
+      overflow: hidden;
       padding: 8px;
       display: grid;
-      align-content: start;
+      grid-template-rows: auto minmax(0, 1fr);
       gap: 8px;
     }
     .keyDot {
@@ -355,6 +448,34 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       font-size: 12px;
       line-height: 16px;
     }
+    .modeSwitch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      padding: 2px;
+      border: 1px solid var(--ac-border);
+      border-radius: var(--ac-radius-sm);
+      background: var(--ac-input);
+    }
+    .modeButton {
+      height: 22px;
+      border-radius: var(--ac-radius-xs);
+      background: transparent;
+      color: var(--ac-muted);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 16px;
+      text-transform: uppercase;
+    }
+    .modeButton:hover {
+      background: var(--vscode-toolbar-hoverBackground, var(--ac-card-hover));
+      color: var(--ac-text);
+    }
+    .modeButton[data-active="true"] {
+      background: var(--ac-primary);
+      color: var(--vscode-button-foreground);
+    }
     .mainButton, .ghostButton {
       width: 100%;
       height: 28px;
@@ -387,6 +508,9 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
     }
     .queueSection {
       min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
     .sectionHeader {
       display: flex;
@@ -409,10 +533,16 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       cursor: pointer;
     }
     .reviewList {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
       display: grid;
+      align-content: start;
       gap: 8px;
+      padding-right: 2px;
     }
     .commitCard {
+      position: relative;
       display: grid;
       gap: 8px;
       padding: 8px;
@@ -430,9 +560,10 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       border-left-color: var(--ac-border-strong);
     }
     .commitTop {
-      display: flex;
+      display: grid;
+      grid-template-columns: 13px minmax(0, 1fr);
       align-items: flex-start;
-      gap: 4px;
+      gap: 5px;
       min-width: 0;
     }
     .fileBody {
@@ -445,6 +576,7 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       display: flex;
       align-items: center;
       min-width: 0;
+      padding-right: 42px;
     }
     .filePath {
       min-width: 0;
@@ -486,7 +618,9 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       overflow: hidden;
     }
     .cardActions {
-      flex: 0 0 auto;
+      position: absolute;
+      top: 6px;
+      right: 6px;
       display: inline-flex;
       align-items: center;
       gap: 2px;
@@ -540,6 +674,70 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
     .messageInput:focus {
       border-color: var(--ac-primary);
     }
+    .batchPanel {
+      display: grid;
+      gap: 8px;
+    }
+    .batchMessageCard {
+      display: grid;
+      gap: 6px;
+      padding: 8px;
+      border: 1px solid var(--ac-border);
+      border-left: 2px solid var(--ac-primary-soft);
+      border-radius: var(--ac-radius-sm);
+      background: var(--ac-card);
+    }
+    .batchHead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+    .batchMessageInput {
+      width: 100%;
+      height: 46px;
+      resize: none;
+      border: 1px solid var(--ac-border-strong);
+      border-radius: var(--ac-radius-xs);
+      outline: none;
+      background: var(--ac-input);
+      color: var(--vscode-input-foreground);
+      padding: 4px 20px 4px 6px;
+      font-family: "SF Mono", Consolas, monospace;
+      font-size: 12px;
+      line-height: 16px;
+      cursor: text;
+      transition: border-color 120ms ease;
+    }
+    .batchMessageInput:hover {
+      border-color: var(--ac-dim);
+    }
+    .batchMessageInput:focus {
+      border-color: var(--ac-primary);
+    }
+    .batchFiles {
+      display: grid;
+      gap: 4px;
+    }
+    .batchFileRow {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 13px minmax(0, 1fr);
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px;
+      border: 1px solid transparent;
+      border-radius: var(--ac-radius-xs);
+      background: transparent;
+      color: var(--ac-text);
+    }
+    .batchFileRow:hover {
+      background: var(--ac-card-hover);
+    }
+    .batchFileRow[data-included="false"] {
+      opacity: 0.55;
+    }
     .editMark {
       position: absolute;
       top: 5px;
@@ -586,17 +784,21 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
             <span class="caps">${this.state.apiKeyConfigured ? "Key Set" : "No Key"}</span>
           </span>
         </div>
-        <p class="statusMessage">${escapeHtml(this.state.statusMessage)}</p>
+        <div class="modeSwitch" role="group" aria-label="Commit mode">
+          <button class="modeButton" data-mode="single" data-active="${this.state.commitMode === "single"}" type="button">Single</button>
+          <button class="modeButton" data-mode="batch" data-active="${this.state.commitMode === "batch"}" type="button">Batch</button>
+        </div>
+        <p class="statusMessage">${escapeHtml(displayStatusMessage)}</p>
         <button class="mainButton" data-action="run" ${this.state.stage === "generating" || this.state.stage === "committing" ? "disabled" : ""}>
           <span>${this.state.stage === "generating" ? iconSvg("loader") : iconSvg("sparkle")}</span>
-          <span>${this.state.stage === "generating" ? "Generating Commit Messages" : "Generate Commit Messages"}</span>
+          <span>${generateButtonText}</span>
         </button>
       </section>
       <section class="queueSection">
         <div class="sectionHeader">
           <div class="sectionTitle">
             ${totalCount === 0 ? "" : `<input id="selectAll" class="selectAll" type="checkbox" ${selectedCount > 0 && selectedCount === totalCount ? "checked" : ""} title="Select all" />`}
-            <span class="caps" id="queueCount">Review Queue (${totalCount} file${totalCount === 1 ? "" : "s"})</span>
+            <span class="caps" id="queueCount">${queueTitle}</span>
           </div>
         </div>
         ${
@@ -612,7 +814,7 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
         : `<footer class="footer" id="footer">
           <button class="mainButton" id="commitSelected" ${canCommit ? "" : "disabled"}>
             <span>${iconSvg("check")}</span>
-            <span>Commit Selected (${selectedCount}/${totalCount})</span>
+            <span>${commitButtonText}</span>
           </button>
           <button class="ghostButton" data-action="clear-review">
             <span>${iconSvg("trash")}</span>
@@ -623,7 +825,10 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    const commitMode = ${JSON.stringify(this.state.commitMode)};
     const commits = ${JSON.stringify(this.state.pendingCommits)};
+    const batchReview = ${JSON.stringify(this.state.batchReview ?? null)};
+    const activeBatchReview = commitMode === "batch" ? batchReview : null;
 
     function escapeHtml(value) {
       return value.replace(/[&<>"]/g, (char) => ({
@@ -641,6 +846,11 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       }
 
       reviewList.innerHTML = "";
+      if (activeBatchReview) {
+        renderBatchReview(reviewList);
+        return;
+      }
+
       if (commits.length === 0) {
         reviewList.innerHTML = '<p class="emptyState">No files in review. Generate messages to start.</p>';
         return;
@@ -693,6 +903,53 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       });
     }
 
+    function renderBatchReview(reviewList) {
+      const selected = activeBatchReview.files.filter((entry) => entry.included).length;
+      reviewList.innerHTML = \`
+        <div class="batchPanel">
+          <section class="batchMessageCard">
+            <div class="batchHead">
+              <span class="caps">Batch Commit Message</span>
+              \${activeBatchReview.isFallback ? '<span class="tag fallbackTag">Fallback</span>' : ""}
+            </div>
+            <div class="messageWrap">
+              <textarea class="batchMessageInput" id="batchMessage" data-kind="batch-message">\${escapeHtml(activeBatchReview.message)}</textarea>
+              <span class="editMark">${iconSvg("edit", "svgIcon svgIconSmall")}</span>
+            </div>
+          </section>
+          <section class="batchFiles">
+            <div class="sectionHeader">
+              <div class="sectionTitle">
+                <span class="caps" id="batchFilesCount">Files Included (\${selected}/\${activeBatchReview.files.length})</span>
+              </div>
+            </div>
+            <div id="batchFileList"></div>
+          </section>
+        </div>
+      \`;
+
+      const batchFileList = document.getElementById("batchFileList");
+      if (!batchFileList) {
+        return;
+      }
+
+      activeBatchReview.files.forEach((entry, index) => {
+        const row = document.createElement("label");
+        row.className = "batchFileRow";
+        row.dataset.included = String(entry.included);
+        row.innerHTML = \`
+          <input class="selectAll" type="checkbox" data-kind="batch-included" data-index="\${index}" \${entry.included ? "checked" : ""} />
+          <span class="filePath" title="\${escapeHtml(entry.filePath)}">\${escapeHtml(entry.filePath)}</span>
+        \`;
+        batchFileList.appendChild(row);
+      });
+
+      reviewList.querySelectorAll("input, textarea").forEach((input) => {
+        input.addEventListener("input", handleInput);
+        input.addEventListener("change", handleInput);
+      });
+    }
+
     function handleInput(event) {
       const target = event.target;
       const index = Number(target.dataset.index);
@@ -704,8 +961,20 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
         }
         updateSelectedState();
       }
+      if (target.dataset.kind === "batch-included" && activeBatchReview) {
+        activeBatchReview.files[index].included = target.checked;
+        const row = target.closest(".batchFileRow");
+        if (row) {
+          row.dataset.included = String(target.checked);
+        }
+        updateSelectedState();
+      }
       if (target.dataset.kind === "message") {
         commits[index].message = target.value;
+      }
+      if (target.dataset.kind === "batch-message" && activeBatchReview) {
+        activeBatchReview.message = target.value;
+        updateSelectedState();
       }
     }
 
@@ -718,28 +987,38 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
     }
 
     function updateSelectedState() {
-      const selected = commits.filter((entry) => entry.included).length;
-      const total = commits.length;
+      const selected = activeBatchReview
+        ? activeBatchReview.files.filter((entry) => entry.included).length
+        : commits.filter((entry) => entry.included).length;
+      const total = activeBatchReview ? activeBatchReview.files.length : commits.length;
       const selectAll = document.getElementById("selectAll");
       const commitButton = document.getElementById("commitSelected");
       const footer = document.getElementById("footer");
       const queueCount = document.getElementById("queueCount");
+      const batchFilesCount = document.getElementById("batchFilesCount");
       if (selectAll) {
         selectAll.checked = total > 0 && selected === total;
         selectAll.indeterminate = selected > 0 && selected < total;
         selectAll.disabled = total === 0;
       }
       if (queueCount) {
-        queueCount.textContent = \`Review Queue (\${total} file\${total === 1 ? "" : "s"})\`;
+        queueCount.textContent = activeBatchReview
+          ? \`Batch Review (\${total} file\${total === 1 ? "" : "s"})\`
+          : \`Review Queue (\${total} file\${total === 1 ? "" : "s"})\`;
+      }
+      if (batchFilesCount && activeBatchReview) {
+        batchFilesCount.textContent = \`Files Included (\${selected}/\${total})\`;
       }
       if (footer) {
         footer.hidden = total === 0;
       }
       if (commitButton) {
-        commitButton.disabled = selected === 0;
+        commitButton.disabled = selected === 0 || (activeBatchReview && !activeBatchReview.message.trim());
         const label = commitButton.querySelector("span:last-child");
         if (label) {
-          label.textContent = \`Commit Selected (\${selected}/\${total})\`;
+          label.textContent = activeBatchReview
+            ? \`Commit Batch (\${selected}/\${total})\`
+            : \`Commit Selected (\${selected}/\${total})\`;
         }
       }
     }
@@ -750,12 +1029,24 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
       });
     });
 
+    document.querySelectorAll("button[data-mode]").forEach((button) => {
+      button.addEventListener("click", () => {
+        vscode.postMessage({ type: "set-mode", mode: button.dataset.mode });
+      });
+    });
+
     const selectAll = document.getElementById("selectAll");
     if (selectAll) {
       selectAll.addEventListener("change", () => {
-        commits.forEach((entry) => {
-          entry.included = selectAll.checked;
-        });
+        if (activeBatchReview) {
+          activeBatchReview.files.forEach((entry) => {
+            entry.included = selectAll.checked;
+          });
+        } else {
+          commits.forEach((entry) => {
+            entry.included = selectAll.checked;
+          });
+        }
         renderReview();
         updateSelectedState();
       });
@@ -764,6 +1055,20 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
     const commitButton = document.getElementById("commitSelected");
     if (commitButton) {
       commitButton.addEventListener("click", () => {
+        if (activeBatchReview) {
+          vscode.postMessage({
+            type: "commit-batch",
+            commit: {
+              filePaths: activeBatchReview.files
+                .filter((entry) => entry.included)
+                .map((entry) => entry.filePath),
+              message: activeBatchReview.message,
+              isFallback: activeBatchReview.isFallback
+            }
+          });
+          return;
+        }
+
         document.querySelectorAll(".commitCard[data-included='true']").forEach((card) => {
           card.classList.add("committingState");
         });
@@ -782,6 +1087,22 @@ export class AutoCommiterSidebarProvider implements vscode.WebviewViewProvider {
 </body>
 </html>`;
   }
+}
+
+function isCommitMode(value: unknown): value is CommitMode {
+  return value === "single" || value === "batch";
+}
+
+function isBatchCommit(value: unknown): value is BatchCommit {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as BatchCommit;
+  return Array.isArray(candidate.filePaths)
+    && candidate.filePaths.every((filePath) => typeof filePath === "string")
+    && typeof candidate.message === "string"
+    && typeof candidate.isFallback === "boolean";
 }
 
 function escapeHtml(value: string): string {
