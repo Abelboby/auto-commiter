@@ -41,6 +41,7 @@ const git_1 = require("./git");
 const groq_1 = require("./groq");
 const sidebarView_1 = require("./sidebarView");
 const settingsPanel_1 = require("./settingsPanel");
+const updater_1 = require("./updater");
 const OUTPUT_CHANNEL = vscode.window.createOutputChannel("Auto Commiter");
 function activate(context) {
     context.subscriptions.push(OUTPUT_CHANNEL);
@@ -72,9 +73,65 @@ function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand("autoCommiter.openOutput", async () => {
         OUTPUT_CHANNEL.show(true);
     }));
+    let latestUpdate;
+    const performUpdateCheck = async (showResult) => {
+        sidebarProvider.setUpdateChecking();
+        latestUpdate = await (0, updater_1.checkForUpdate)(context);
+        sidebarProvider.setUpdateState(latestUpdate);
+        OUTPUT_CHANNEL.appendLine(`Update check: ${latestUpdate.message}`);
+        if (showResult) {
+            if (latestUpdate.status === "available") {
+                vscode.window.showInformationMessage(latestUpdate.message);
+            }
+            else if (latestUpdate.status === "current") {
+                vscode.window.showInformationMessage(latestUpdate.message);
+            }
+            else if (latestUpdate.status === "error") {
+                vscode.window.showWarningMessage(`Auto Commiter update check failed: ${latestUpdate.message}`);
+            }
+        }
+        return latestUpdate;
+    };
+    context.subscriptions.push(vscode.commands.registerCommand("autoCommiter.checkForUpdates", async () => {
+        await performUpdateCheck(true);
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand("autoCommiter.installUpdate", async () => {
+        const update = latestUpdate?.status === "available"
+            ? latestUpdate
+            : await performUpdateCheck(false);
+        if (update.status !== "available") {
+            vscode.window.showInformationMessage(update.message);
+            return;
+        }
+        try {
+            sidebarProvider.setUpdateInstalling(update);
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "Installing Auto Commiter update",
+                cancellable: false
+            }, async () => {
+                await (0, updater_1.installUpdate)(context, update, OUTPUT_CHANNEL);
+            });
+            const reload = await vscode.window.showInformationMessage(`Auto Commiter v${update.latestVersion} was installed. Reload VS Code to use it.`, "Reload Window");
+            if (reload === "Reload Window") {
+                await vscode.commands.executeCommand("workbench.action.reloadWindow");
+            }
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            OUTPUT_CHANNEL.appendLine(`Update install failed: ${message}`);
+            sidebarProvider.setUpdateState({
+                ...update,
+                status: "error",
+                message
+            });
+            vscode.window.showErrorMessage(`Auto Commiter update failed: ${message}`);
+        }
+    }));
     context.subscriptions.push(vscode.commands.registerCommand("autoCommiter.runAutoCommit", async () => {
         await runAutoCommit(context, sidebarProvider);
     }));
+    void performUpdateCheck(false);
 }
 async function runAutoCommit(context, sidebarProvider) {
     try {
