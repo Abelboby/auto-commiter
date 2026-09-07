@@ -19,17 +19,10 @@
   },
   "categories": [
     "Other",
-    "SCM"
+    "SCM Providers"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onCommand:autoCommiter.runAutoCommit",
-    "onCommand:autoCommiter.manageSettings",
-    "onCommand:autoCommiter.setGroqApiKey",
-    "onCommand:autoCommiter.openOutput",
-    "onCommand:autoCommiter.checkForUpdates",
-    "onCommand:autoCommiter.installUpdate",
-    "onView:autoCommiter.sidebar"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -47,7 +40,8 @@
         {
           "id": "autoCommiter.sidebar",
           "name": "Auto Commiter",
-          "type": "webview"
+          "type": "webview",
+          "icon": "media/activity-bar.svg"
         }
       ]
     },
