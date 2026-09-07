@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.12
+
+- Ignore all .env files in subdirectories
+- Adjusted categories, activation events, and added sidebar icon
+
 ## 0.1.11
 
 - Updated CHANGELOG.md to include new features and improvements for versions 0.1.10 to 0.1.4
